@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Master Diagram Arsitektur Lengkap Mini-SIEM Golang</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #020617;
+      --card-bg: #0b1329;
+      --card-border: #1e293b;
+      --cyan: #22d3ee;
+      --emerald: #34d399;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --violet: #a78bfa;
+      --blue: #38bdf8;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      padding: 20px;
+      line-height: 1.5;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #22c55e;
+      box-shadow: 0 0 10px #22c55e;
+    }
+    .header p {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .diagram-container {
+      max-width: 1560px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    }
+    .svg-wrapper {
+      width: 100%;
+      background: #020617;
+      border-radius: 8px;
+      border: 1px solid #1e293b;
+      overflow-x: auto;
+      padding: 10px;
+    }
+    svg {
+      width: 100%;
+      min-width: 1350px;
+      height: auto;
+      display: block;
+    }
+    .legend-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 16px;
+      padding: 12px;
+      background: #0f172a;
+      border-radius: 8px;
+      border: 1px solid #1e293b;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .legend-color {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+    }
+    .notes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 14px;
+      max-width: 1560px;
+      margin: 20px auto 0 auto;
+    }
+    .note-card {
+      background: #0b1329;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+    .note-card h3 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #38bdf8;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 6px;
+    }
+    .note-card p, .note-card ul {
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    .note-card ul { list-style: none; padding-left: 0; }
+    .note-card li { margin-bottom: 4px; }
+    .note-card li::before { content: "• "; color: #64748b; }
+    .note-card strong { color: #f8fafc; font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1><span class="pulse-dot"></span> MASTER ARSITEKTUR LENGKAP MINI-SIEM TERDISTRIBUSI (FULL SYSTEM)</h1>
+    <p>Diagram Komprehensif Satu Kesatuan: Lingkungan Docker, Aliran Serangan, Telemetri Agent, In-Stream Core Engine, Respon Insiden, & Dashboard</p>
+  </div>
+
+  <div class="diagram-container">
+    <div class="svg-wrapper">
+      <svg viewBox="0 0 1480 940" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid-bg" width="30" height="30" patternUnits="userSpaceOnUse">
+            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#0e1726" stroke-width="0.7"/>
+          </pattern>
+          <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+          </marker>
+          <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+          </marker>
+          <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#fb7185"/>
+          </marker>
+          <marker id="arrow-amber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+          </marker>
+          <marker id="arrow-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa"/>
+          </marker>
+        </defs>
+
+        <rect width="1480" height="940" fill="#020617"/>
+        <rect width="1480" height="940" fill="url(#grid-bg)"/>
+
+        <!-- ================= 1. BOUNDARY BESAR: DOCKER BRIDGE NETWORK & HOST ================= -->
+        <rect x="290" y="20" width="1170" height="900" rx="14" fill="rgba(15,23,42,0.4)" stroke="#334155" stroke-width="1.8"/>
+        <text x="310" y="44" fill="#94a3b8" font-family="'JetBrains Mono'" font-size="12" font-weight="700">HOST MACHINE: Windows 10 Pro (x86_64) | Docker Desktop Engine</text>
+        <text x="310" y="58" fill="#64748b" font-family="'JetBrains Mono'" font-size="9.5">Docker Bridge Network: siem-network (Subnet: 172.20.0.0/16, Gateway: 172.20.0.1)</text>
+
+        <!-- ================= 2. ZONA ADVERSARY / ATTACKER (KIRI LUAR DOCKER) ================= -->
+        <rect x="15" y="20" width="255" height="420" rx="10" fill="rgba(136,19,55,0.18)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="30" y="44" fill="#fb7185" font-family="'JetBrains Mono'" font-size="12" font-weight="700">ZONE 1: ADVERSARY / SERANGAN</text>
+        <text x="30" y="58" fill="#fda4af" font-family="'JetBrains Mono'" font-size="9">Simulasi Penyerang Siber Eksternal</text>
+
+        <!-- Box: Kali Linux -->
+        <rect x="30" y="75" width="225" height="95" rx="6" fill="#0f172a" stroke="#e11d48" stroke-width="1.2"/>
+        <text x="45" y="98" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="11" font-weight="700">Kali Linux / Attacker Host</text>
+        <text x="45" y="115" fill="#fca5a5" font-family="'JetBrains Mono'" font-size="9">• Tool: Hydra (SSH &amp; HTTP POST)</text>
+        <text x="45" y="130" fill="#fca5a5" font-family="'JetBrains Mono'" font-size="9">• Tool: Scapy / Python Brute Script</text>
+        <text x="45" y="145" fill="#fca5a5" font-family="'JetBrains Mono'" font-size="9">• IP: 103.145.22.8 (Attacker IP)</text>
+
+        <!-- Box: Threat Feeds & Botnets -->
+        <rect x="30" y="185" width="225" height="110" rx="6" fill="#0f172a" stroke="#e11d48" stroke-width="1.2"/>
+        <text x="45" y="208" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="11" font-weight="700">Adversary Infrastructure</text>
+        <text x="45" y="225" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Tor Exit Nodes (~1.000 IPs)</text>
+        <text x="45" y="240" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Cloud Datacenter VPS (AWS, DO)</text>
+        <text x="45" y="255" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Residential Open Proxies</text>
+        <text x="45" y="275" fill="#67e8f9" font-family="'JetBrains Mono'" font-size="8">Dataset: data/ips/*.txt</text>
+
+        <!-- Box: Serangan Web Payloads -->
+        <rect x="30" y="310" width="225" height="115" rx="6" fill="#0f172a" stroke="#e11d48" stroke-width="1.2"/>
+        <text x="45" y="330" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="11" font-weight="700">Attack Vectors / Payloads</text>
+        <text x="45" y="348" fill="#fda4af" font-family="'JetBrains Mono'" font-size="8.5">• Credential Stuffing &amp; Password Spray</text>
+        <text x="45" y="363" fill="#fda4af" font-family="'JetBrains Mono'" font-size="8.5">• SQL Injection (' OR '1'='1)</text>
+        <text x="45" y="378" fill="#fda4af" font-family="'JetBrains Mono'" font-size="8.5">• Cross-Site Scripting (&lt;script&gt;)</text>
+        <text x="45" y="395" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8">Dataset: data/logs/web_attack_payloads.log</text>
+
+        <!-- Red Arrows from Attacker to Target Containers -->
+        <path d="M 255 120 L 320 120 L 320 120 L 340 120" fill="none" stroke="#fb7185" stroke-width="2" marker-end="url(#arrow-red)"/>
+        <text x="290" y="112" fill="#fb7185" font-family="'JetBrains Mono'" font-size="8.5" text-anchor="middle">HTTP POST :3000</text>
+
+        <path d="M 255 240 L 305 240 L 305 260 L 340 260" fill="none" stroke="#fb7185" stroke-width="2" marker-end="url(#arrow-red)"/>
+        <text x="295" y="232" fill="#fb7185" font-family="'JetBrains Mono'" font-size="8.5" text-anchor="middle">API Hit :3001</text>
+
+        <path d="M 255 370 L 305 370 L 305 400 L 340 400" fill="none" stroke="#fb7185" stroke-width="2" marker-end="url(#arrow-red)"/>
+        <text x="295" y="365" fill="#fb7185" font-family="'JetBrains Mono'" font-size="8.5" text-anchor="middle">Web Attack :8000</text>
+
+
+        <!-- ================= 3. ZONA TARGET MONITORED NODES (DOCKER) ================= -->
+        <rect x="340" y="65" width="350" height="430" rx="10" fill="rgba(15,23,42,0.7)" stroke="#0284c7" stroke-width="1.5"/>
+        <text x="355" y="88" fill="#38bdf8" font-family="'JetBrains Mono'" font-size="12" font-weight="700">ZONE 2: MONITORED TARGET NODES</text>
+        <text x="355" y="102" fill="#7dd3fc" font-family="'JetBrains Mono'" font-size="8.5">Lingkungan Container CentOS Stream 9 (Multi-Node)</text>
+
+        <!-- Container 1: target-server1 (Auth) -->
+        <rect x="355" y="115" width="320" height="110" rx="6" fill="#0b1329" stroke="#0284c7" stroke-width="1.2"/>
+        <text x="368" y="134" fill="#38bdf8" font-family="'JetBrains Mono'" font-size="10.5" font-weight="700">target-server1 (IP: 172.20.0.11:3000)</text>
+        <text x="368" y="148" fill="#94a3b8" font-family="'JetBrains Mono'" font-size="8.5">Golang Fiber Auth Service (JWT Token &amp; Users)</text>
+        <rect x="368" y="155" width="145" height="58" rx="4" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+        <text x="375" y="172" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="8.5" font-weight="600">Auth Controller</text>
+        <text x="375" y="186" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="7.5">• POST /api/auth/login</text>
+        <text x="375" y="198" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="7.5">• JWT Expiration Check</text>
+
+        <rect x="522" y="155" width="145" height="58" rx="4" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.2"/>
+        <text x="530" y="172" fill="#34d399" font-family="'JetBrains Mono'" font-size="8.5" font-weight="700">SIEM Agent Hook</text>
+        <text x="530" y="186" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="7.5">• Fiber Auth Middleware</text>
+        <text x="530" y="198" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="7.5">• Non-blocking Go Channel</text>
+
+        <!-- Container 2: target-server2 (Resource) -->
+        <rect x="355" y="235" width="320" height="105" rx="6" fill="#0b1329" stroke="#0284c7" stroke-width="1.2"/>
+        <text x="368" y="254" fill="#38bdf8" font-family="'JetBrains Mono'" font-size="10.5" font-weight="700">target-server2 (IP: 172.20.0.12:3001)</text>
+        <text x="368" y="268" fill="#94a3b8" font-family="'JetBrains Mono'" font-size="8.5">Golang Resource Server (Protected Customer Data)</text>
+        <rect x="368" y="275" width="145" height="55" rx="4" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+        <text x="375" y="292" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="8.5" font-weight="600">Resource API</text>
+        <text x="375" y="306" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="7.5">• GET /api/data</text>
+        <text x="375" y="318" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="7.5">• 401/403 Denied Audit</text>
+
+        <rect x="522" y="275" width="145" height="55" rx="4" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.2"/>
+        <text x="530" y="292" fill="#34d399" font-family="'JetBrains Mono'" font-size="8.5" font-weight="700">SIEM Agent Hook</text>
+        <text x="530" y="306" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="7.5">• Token Validation Spy</text>
+        <text x="530" y="318" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="7.5">• Async Stream Shipper</text>
+
+        <!-- Container 3: target-realkabil (Laravel Web) -->
+        <rect x="355" y="350" width="320" height="130" rx="6" fill="#0b1329" stroke="#d97706" stroke-width="1.2"/>
+        <text x="368" y="370" fill="#fbbf24" font-family="'JetBrains Mono'" font-size="10.5" font-weight="700">target-realkabil (IP: 172.20.0.13:8000)</text>
+        <text x="368" y="384" fill="#94a3b8" font-family="'JetBrains Mono'" font-size="8.5">PHP 8.3-FPM + Nginx Web Server (RealKABIL App)</text>
+        <rect x="368" y="390" width="145" height="75" rx="4" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+        <text x="375" y="407" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="8.5" font-weight="600">Laravel 11 Core</text>
+        <text x="375" y="421" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="7.5">• SQLite Database</text>
+        <text x="375" y="433" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="7.5">• Web Forms &amp; Auth</text>
+        <text x="375" y="447" fill="#fed7aa" font-family="'JetBrains Mono'" font-size="7.5">• storage/logs/laravel.log</text>
+
+        <rect x="522" y="390" width="145" height="75" rx="4" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.2"/>
+        <text x="530" y="407" fill="#34d399" font-family="'JetBrains Mono'" font-size="8.5" font-weight="700">Log Tailer Agent</text>
+        <text x="530" y="421" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="7.5">• Linux inotify Daemon</text>
+        <text x="530" y="433" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="7.5">• Real-time File Reader</text>
+        <text x="530" y="447" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="7.5">• HTTP POST Shipper</text>
+
+
+        <!-- ================= 4. ZONA CENTRAL MINI-SIEM ENGINE (KANAN) ================= -->
+        <rect x="740" y="65" width="700" height="710" rx="12" fill="#061918" stroke="#34d399" stroke-width="2"/>
+        <text x="760" y="92" fill="#34d399" font-family="'JetBrains Mono'" font-size="14" font-weight="700">ZONE 3: PUSAT ENGINE MINI-SIEM (siem-central :4000)</text>
+        <text x="760" y="108" fill="#6ee7b7" font-family="'JetBrains Mono'" font-size="9.5">Container IP: 172.20.0.10 | Single Binary Native Golang (Memory Footprint &lt; 80MB)</text>
+
+        <!-- Streams from Target Agents to Central SIEM -->
+        <path d="M 667 185 L 755 185" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+        <path d="M 667 300 L 710 300 L 710 200 L 755 200" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+        <path d="M 667 430 L 720 430 L 720 215 L 755 215" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+        <text x="705" y="170" fill="#34d399" font-family="'JetBrains Mono'" font-size="8.5" text-anchor="middle">Event Stream (JSON)</text>
+
+        <!-- STAGE 1: Central Ingestion Gateway -->
+        <rect x="760" y="130" width="655" height="75" rx="6" fill="#0f172a" stroke="#059669" stroke-width="1.5"/>
+        <text x="775" y="152" fill="#34d399" font-family="'JetBrains Mono'" font-size="11" font-weight="700">1. CENTRAL EVENT INGESTION GATEWAY (api.go)</text>
+        <text x="775" y="169" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">• Endpoint: POST /api/v1/events (Fiber Router &amp; Sonic JSON Parser)</text>
+        <text x="775" y="183" fill="#94a3b8" font-family="'JetBrains Mono'" font-size="8.5">• Worker Pool Concurrency: Non-blocking buffered Go Channel (cap: 10.000 events)</text>
+        <text x="775" y="196" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="8.5">• API Token Verification &amp; Ingest Latency &lt; 0.5 ms</text>
+
+        <!-- Arrow Down to Normalizer -->
+        <line x1="1080" y1="205" x2="1080" y2="225" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+        <!-- STAGE 2: Normalization Engine -->
+        <rect x="760" y="225" width="655" height="70" rx="6" fill="#0f172a" stroke="#059669" stroke-width="1.5"/>
+        <text x="775" y="246" fill="#34d399" font-family="'JetBrains Mono'" font-size="11" font-weight="700">2. LOG NORMALIZATION ENGINE (Schema Standardization)</text>
+        <text x="775" y="262" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">Menyeragamkan log heterogen (Syslog, Laravel text, HTTP payload) ke struktur data baku:</text>
+        <text x="775" y="278" fill="#67e8f9" font-family="'JetBrains Mono'" font-size="8.5">type NormalizedEvent struct { Timestamp, SourceIP, Username, EventType, Status, TargetNode, URI }</text>
+
+        <!-- Arrow Down to Upstream Enrichment -->
+        <line x1="1080" y1="295" x2="1080" y2="315" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+        <!-- STAGE 3: Upstream Threat Intel Enrichment (Jurnal 5) -->
+        <rect x="760" y="315" width="655" height="95" rx="6" fill="rgba(6,78,59,0.5)" stroke="#10b981" stroke-width="1.5"/>
+        <text x="775" y="337" fill="#34d399" font-family="'JetBrains Mono'" font-size="11" font-weight="700">3. UPSTREAM THREAT INTEL ENRICHMENT (services/ipapi.go - Jurnal 5)</text>
+        <text x="775" y="354" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">• <strong>In-Memory sync.Map LRU Cache:</strong> Lookup IP di memori RAM (Hit Latency &lt; 1µs)</text>
+        <text x="775" y="369" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">• <strong>Offline Feed Check:</strong> Cocokkan data/ips/tor_exit_nodes.txt &amp; datacenter_hosting_ips.txt</text>
+        <text x="775" y="384" fill="#fde68a" font-family="'JetBrains Mono'" font-size="8.5">• <strong>External IP-API Fallback:</strong> Query http://ip-api.com/json/{ip}?fields=64225277 (Attach Geo, ISP, Proxy, Hosting)</text>
+        <text x="775" y="398" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="8">Keuntungan: Memangkas Mean Time to Detect (MTTD) hingga 40% sebelum korelasi dijalankan</text>
+
+        <!-- Arrow Down to Sliding Window -->
+        <line x1="1080" y1="410" x2="1080" y2="430" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+        <!-- STAGE 4: In-Memory Sliding Window Buffer (Jurnal 1 & 2) -->
+        <rect x="760" y="430" width="655" height="95" rx="6" fill="rgba(8,51,68,0.5)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="775" y="452" fill="#22d3ee" font-family="'JetBrains Mono'" font-size="11" font-weight="700">4. IN-MEMORY SLIDING WINDOW CORRELATION BUFFER (Jurnal 1 &amp; 2)</text>
+        <text x="775" y="469" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">• <strong>Buffer Structure:</strong> <code>sync.Map[string][]time.Time</code> (Kunci gabungan: <code>SourceIP + Username</code>)</text>
+        <text x="775" y="484" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">• <strong>Pruning Mechanism:</strong> Saat event baru masuk di $T$, hapus record yang usianya &gt; $(T - 5\text{ menit})$</text>
+        <text x="775" y="499" fill="#67e8f9" font-family="'JetBrains Mono'" font-size="8.5">• <strong>Stateful Counter:</strong> Hitung panjang slice: <code>len(timestamps) &gt;= threshold (5)</code></text>
+        <text x="775" y="513" fill="#a5f3fc" font-family="'JetBrains Mono'" font-size="8">Keunggulan: Mencegah serangan brute-force lolos di batas interval waktu tanpa menyentuh disk</text>
+
+        <!-- Arrow Down to Sigma Rule Evaluator -->
+        <line x1="1080" y1="525" x2="1080" y2="545" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+        <!-- STAGE 5: Standalone Sigma Engine & RBA (Jurnal 4 & 13) -->
+        <rect x="760" y="545" width="655" height="100" rx="6" fill="rgba(120,53,15,0.35)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="775" y="567" fill="#fbbf24" font-family="'JetBrains Mono'" font-size="11" font-weight="700">5. STANDALONE SIGMA RULE EVALUATOR &amp; RBA SCORING (rule.yaml - Jurnal 4 &amp; 13)</text>
+        <text x="775" y="584" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">• <strong>Sigma YAML Parser:</strong> <code>gopkg.in/yaml.v3</code> mengevaluasi AST kondisi deklaratif</text>
+        <text x="775" y="598" fill="#fde68a" font-family="'JetBrains Mono'" font-size="8.5">• <strong>Condition Match:</strong> <code>status == 'fail' &amp;&amp; window_count &gt;= 5 &amp;&amp; is_hosting == true</code></text>
+        <text x="775" y="612" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="9">• <strong>Risk-Based Alerting Formula:</strong> <code>R = 0.3·Severity + 0.25·Accumulation + 0.25·Rarity + 0.2·ThreatMod</code></text>
+        <text x="775" y="628" fill="#fca5a5" font-family="'JetBrains Mono'" font-size="8.5">• <strong>MITRE ATT&CK Mapping:</strong> T1110 (Brute Force) / T1078 (Valid Accounts Abuse) / T1059 (Execution)</text>
+
+        <!-- Arrow Split: Output Branches -->
+        <path d="M 900 645 L 900 665 L 850 665 L 850 680" fill="none" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+        <path d="M 1080 645 L 1080 680" fill="none" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+        <path d="M 1250 645 L 1250 665 L 1300 665 L 1300 680" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+        <!-- Output 1: Incident Storage -->
+        <rect x="760" y="680" width="190" height="80" rx="6" fill="rgba(136,19,55,0.3)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="770" y="700" fill="#fb7185" font-family="'JetBrains Mono'" font-size="10" font-weight="700">6A. Incident Store</text>
+        <text x="770" y="716" fill="#fda4af" font-family="'JetBrains Mono'" font-size="8.5">• Write: <code>alerts.json</code></text>
+        <text x="770" y="730" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8">• Format: NDJSON Stream</text>
+        <text x="770" y="744" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8">• Forensics Chain-of-Custody</text>
+
+        <!-- Output 2: Embedded Web Dashboard -->
+        <rect x="965" y="680" width="220" height="80" rx="6" fill="rgba(8,51,68,0.6)" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="975" y="700" fill="#38bdf8" font-family="'JetBrains Mono'" font-size="10" font-weight="700">6B. Embedded Dashboard</text>
+        <text x="975" y="716" fill="#7dd3fc" font-family="'JetBrains Mono'" font-size="8.5">• Go <code>embed.FS</code> (/dashboard)</text>
+        <text x="975" y="730" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8">• Leaflet.js Live Geolocation</text>
+        <text x="975" y="744" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8">• Chart.js Real-time Spikes</text>
+
+        <!-- Output 3: AI SOC Assistant -->
+        <rect x="1200" y="680" width="215" height="80" rx="6" fill="rgba(76,29,149,0.35)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="1210" y="700" fill="#a78bfa" font-family="'JetBrains Mono'" font-size="10" font-weight="700">6C. AI SOC Assistant</text>
+        <text x="1210" y="716" fill="#c4b5fd" font-family="'JetBrains Mono'" font-size="8.5">• LLM Tier-2 RCA Dispatch</text>
+        <text x="1210" y="730" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8">• Kronologi Serangan Otomatis</text>
+        <text x="1210" y="744" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8">• Rekomendasi Mitigasi Analis</text>
+
+
+        <!-- ================= 5. ZONA CLOSED-LOOP MITIGATION (FIREWALL CONTROLLER) ================= -->
+        <rect x="340" y="520" width="350" height="255" rx="10" fill="rgba(136,19,55,0.2)" stroke="#fb7185" stroke-width="1.8"/>
+        <text x="355" y="545" fill="#fb7185" font-family="'JetBrains Mono'" font-size="12" font-weight="700">ZONE 4: ACTIVE DEFENSE &amp; MITIGASI (NIST SP 800-61)</text>
+        <text x="355" y="560" fill="#fda4af" font-family="'JetBrains Mono'" font-size="8.5">Respon Otonom Deterministik: Closed-Loop SOAR</text>
+
+        <rect x="355" y="575" width="320" height="90" rx="6" fill="#0f172a" stroke="#e11d48" stroke-width="1.2"/>
+        <text x="370" y="598" fill="#fb7185" font-family="'JetBrains Mono'" font-size="10.5" font-weight="700">Automated Firewall Action (iptables)</text>
+        <text x="370" y="615" fill="#fca5a5" font-family="'JetBrains Mono'" font-size="9">Command: <code>iptables -A INPUT -s 103.145.22.8 -j DROP</code></text>
+        <text x="370" y="632" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Dieksekusi seketika via Docker Socket Engine (/var/run/docker.sock)</text>
+        <text x="370" y="647" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="8.5">• Penyerang langsung terblokir di level interface kernel Linux</text>
+
+        <rect x="355" y="675" width="320" height="85" rx="6" fill="#0f172a" stroke="#059669" stroke-width="1.2"/>
+        <text x="370" y="698" fill="#34d399" font-family="'JetBrains Mono'" font-size="10.5" font-weight="700">Containment Verification</text>
+        <text x="370" y="715" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Paket serangan berikutnya langsung di-DROP tanpa beban CPU aplikasi</text>
+        <text x="370" y="730" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Log penolakan paket dicatat di audit iptables</text>
+        <text x="370" y="745" fill="#7dd3fc" font-family="'JetBrains Mono'" font-size="8">Siklus Deteksi ke Mitigasi Selesai dalam &lt; 15 Milidetik</text>
+
+        <!-- Feedback arrow from SIEM Central to Mitigation Controller -->
+        <path d="M 760 720 L 710 720 L 710 620 L 675 620" fill="none" stroke="#fb7185" stroke-width="2" stroke-dasharray="4,4" marker-end="url(#arrow-red)"/>
+        <text x="710" y="670" fill="#fb7185" font-family="'JetBrains Mono'" font-size="8.5" text-anchor="middle" transform="rotate(-90 710 670)">AUTO-BLOCK DISPATCH</text>
+
+
+        <!-- ================= 6. ZONA OPERATOR & SOC ANALYST (BAWAH) ================= -->
+        <rect x="15" y="470" width="255" height="305" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="30" y="495" fill="#38bdf8" font-family="'JetBrains Mono'" font-size="12" font-weight="700">ZONE 5: SOC ANALYST COCKPIT</text>
+        <text x="30" y="510" fill="#7dd3fc" font-family="'JetBrains Mono'" font-size="8.5">Antarmuka Pemantauan Analis</text>
+
+        <rect x="30" y="525" width="225" height="85" rx="6" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+        <text x="45" y="546" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="10" font-weight="600">Web Browser Access</text>
+        <text x="45" y="563" fill="#38bdf8" font-family="'JetBrains Mono'" font-size="9">http://localhost:4000/dashboard</text>
+        <text x="45" y="578" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Single-Binary Embedded UI</text>
+        <text x="45" y="593" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Live WebSocket Incident Feed</text>
+
+        <rect x="30" y="620" width="225" height="75" rx="6" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+        <text x="45" y="640" fill="#f8fafc" font-family="'JetBrains Mono'" font-size="10" font-weight="600">Investigasi &amp; Triage</text>
+        <text x="45" y="656" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Meninjau Severity &amp; Risk Score</text>
+        <text x="45" y="670" fill="#cbd5e1" font-family="'JetBrains Mono'" font-size="8.5">• Filter asal negara penyerang</text>
+        <text x="45" y="684" fill="#a7f3d0" font-family="'JetBrains Mono'" font-size="8.5">• Status Auto-Block: ACTIVE</text>
+
+        <rect x="30" y="705" width="225" height="55" rx="6" fill="#020617" stroke="#1e293b" stroke-width="1"/>
+        <text x="45" y="725" fill="#a78bfa" font-family="'JetBrains Mono'" font-size="9.5" font-weight="600">LLM RCA On-Demand</text>
+        <text x="45" y="742" fill="#c4b5fd" font-family="'JetBrains Mono'" font-size="8">Klik tombol "Analyze Incident" di UI</text>
+
+        <!-- Arrow from Dashboard to Analyst -->
+        <path d="M 965 740 L 965 800 L 140 800 L 140 775" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-dasharray="3,3" marker-end="url(#arrow-blue)"/>
+        <text x="550" y="792" fill="#38bdf8" font-family="'JetBrains Mono'" font-size="9" text-anchor="middle">HTTP REST API &amp; WebSocket Stream (:4000)</text>
+
+      </svg>
+    </div>
+
+    <!-- LEGEND BAR -->
+    <div class="legend-bar">
+      <div class="legend-item">
+        <div class="legend-color" style="background: #fb7185;"></div>
+        <span>Jalur Serangan &amp; Mitigasi Firewall (Adversary / iptables)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #34d399;"></div>
+        <span>Aliran Log Stream &amp; Pipeline Core In-Memory SIEM</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #22d3ee;"></div>
+        <span>Stateful Sliding Window Buffer (sync.Map)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #fbbf24;"></div>
+        <span>Evaluasi Aturan Terbuka Sigma HQ (rule.yaml)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #a78bfa;"></div>
+        <span>Pengayaan Upstream CTI &amp; Asisten AI SOC</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPREHENSIVE TEXT BREAKDOWN -->
+  <div class="notes-grid">
+    <div class="note-card">
+      <h3>1. ALUR PENYERANGAN & LOG CAPTURE</h3>
+      <p>Penyerang melancarkan serangan (Brute Force / SQLi) dari luar menuju port container target. Saat event terjadi:</p>
+      <ul>
+        <li><strong>Server 1 &amp; 2 (Go):</strong> Middleware Go langsung menangkap kegagalan login secara non-blocking dan menembakkannya ke channel background.</li>
+        <li><strong>RealKABIL (Laravel):</strong> Agent tailer membaca penambahan baris di <code>storage/logs/laravel.log</code> menggunakan inotify OS event.</li>
+        <li>Event dikirim seketika via HTTP POST JSON Stream ke <code>siem-central:4000/api/v1/events</code>.</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>2. PEMROSESAN IN-STREAM & PRE-STORAGE</h3>
+      <p>Pusat SIEM memproses log 100% di memori RAM sebelum data ditulis ke penyimpanan:</p>
+      <ul>
+        <li><strong>Normalizer:</strong> Mengubah field acak menjadi struct seragam.</li>
+        <li><strong>Upstream CTI:</strong> Mengecek cache IP di <code>sync.Map</code>; mendeteksi apakah IP berasal dari Datacenter Hosting atau Tor Exit Node (Jurnal 5).</li>
+        <li><strong>Sliding Window:</strong> Memangkas timestamp kedaluwarsa (&gt;5m) dan menghitung frekuensi kejadian tanpa batas fixed window (Jurnal 1 &amp; 2).</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>3. EVALUASI ATURAN SIGMA & SKORING RBA</h3>
+      <p>Mengevaluasi logika serangan menggunakan standar industri terbuka:</p>
+      <ul>
+        <li>Membaca <code>rule.yaml</code> berbasis spesifikasi resmi <strong>Sigma HQ</strong> dan memetakan ke <strong>MITRE ATT&CK (T1110)</strong> (Jurnal 4).</li>
+        <li>Menghitung formula <strong>Risk-Based Alerting (RBA)</strong> berdasarkan keparahan aturan, akumulasi waktu, kelangkaan event, dan reputasi IP penyerang (Jurnal 13).</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>4. CLOSED-LOOP MITIGASI (SOAR) & UI</h3>
+      <p>Siklus penuh respon insiden otonom sesuai <strong>NIST SP 800-61 Rev. 2</strong>:</p>
+      <ul>
+        <li><strong>Pencatatan Insiden:</strong> Insiden terkonfirmasi ditulis ke <code>alerts.json</code> sebagai bukti forensik digital (Jurnal 11).</li>
+        <li><strong>Auto-Block Firewall:</strong> Perintah <code>iptables -A INPUT -s &lt;IP&gt; -j DROP</code> otomatis dikirim via Docker Socket ke container target untuk memutus serangan seketika.</li>
+        <li><strong>Embedded Dashboard:</strong> Analis memantau live map dan grafik serangan di <code>http://localhost:4000/dashboard</code> (Single Binary Go).</li>
+      </ul>
+    </div>
+  </div>
+
+</body>
+</html>

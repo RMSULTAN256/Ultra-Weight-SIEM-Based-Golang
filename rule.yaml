@@ -1,0 +1,9 @@
+rules:
+  - name: "Failed Login Brute Force"
+    condition: "event_type == 'auth_failure' AND count > 5 IN 5m"
+    severity: HIGH
+    action: alert
+  - name: "Privilege Escalation"
+    condition: "event_type == 'sudo' AND user != 'root'"
+    severity: CRITICAL
+    action: alert

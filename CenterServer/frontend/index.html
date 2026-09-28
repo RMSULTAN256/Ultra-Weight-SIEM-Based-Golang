@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wazuh-Lightweight | Ultra-Lean Mini-SIEM Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- ======================================================== -->
+  <!-- LEFT SIDEBAR NAVBAR (Wazuh-Style Side Navigation)        -->
+  <!-- ======================================================== -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="wazuh-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00a4e4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">WAZUH <span class="brand-sub">LEAN</span></div>
+        <div class="brand-badge">MINI-SIEM SOC</div>
+      </div>
+    </div>
+
+    <!-- Navigation Menu Items -->
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">SECURITY OPERATIONS</div>
+
+      <button class="nav-item active" data-target="view-overview">
+        <span class="nav-icon">📊</span>
+        <span>Overview</span>
+      </button>
+
+      <button class="nav-item" data-target="view-fleet">
+        <span class="nav-icon">🖥️</span>
+        <span>Agents Fleet</span>
+        <span class="badge-count" id="navAgentCount">0</span>
+      </button>
+
+      <button class="nav-item" data-target="view-ip-traffic">
+        <span class="nav-icon">🌐</span>
+        <span>Inbound IP Traffic</span>
+        <span class="badge-count info-badge" id="navIpCount">0</span>
+      </button>
+
+      <button class="nav-item" data-target="view-events">
+        <span class="nav-icon">🛡️</span>
+        <span>Security Events</span>
+        <span class="badge-count" id="navEventCount">0</span>
+      </button>
+
+      <div class="nav-section-title" style="margin-top: 18px;">CONTAINMENT & AUDIT</div>
+
+      <button class="nav-item" data-target="view-containment">
+        <span class="nav-icon">🔒</span>
+        <span>Zero-Trust iptables</span>
+      </button>
+    </nav>
+
+    <!-- Sidebar Bottom Status Footer -->
+    <div class="sidebar-footer">
+      <div class="footer-stat">
+        <span class="footer-label">RAM ENGINE</span>
+        <strong id="ramStat" class="text-success">< 25 MB / 100 MB</strong>
+      </div>
+      <div class="footer-stat">
+        <span class="footer-label">STREAM STATUS</span>
+        <span class="stream-indicator">
+          <span class="dot" id="sideStreamDot"></span>
+          <span id="sideStreamText">Connecting...</span>
+        </span>
+      </div>
+      <div class="analyst-info">
+        <span>👤 D4 RKS Polibatam</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ======================================================== -->
+  <!-- MAIN CONTENT AREA                                        -->
+  <!-- ======================================================== -->
+  <main class="main-wrapper">
+    <!-- Top Header Bar -->
+    <header class="topbar">
+      <div class="topbar-title">
+        <h2 id="currentViewTitle">Security Operations Overview</h2>
+        <span class="topbar-sub">Central Log Collector & Threat Mitigation Engine</span>
+      </div>
+      <div class="topbar-tools">
+        <div class="cluster-pill">
+          <span class="dot green"></span> Cluster: <strong>Docker Dev Grid</strong>
+        </div>
+      </div>
+    </header>
+
+    <div class="content-scroll">
+      <!-- ==================================================== -->
+      <!-- TAB 1: OVERVIEW DASHBOARD                            -->
+      <!-- ==================================================== -->
+      <section id="view-overview" class="tab-pane active">
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>MONITORED AGENTS</span>
+              <span>🖥️</span>
+            </div>
+            <div class="kpi-value"><span id="activeAgentsCount">0</span> <small>/ 3 Active</small></div>
+            <div class="kpi-footer" id="agentTagsSummary">Waiting for nodes...</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>UNIQUE SENDER IPS</span>
+              <span>🌐</span>
+            </div>
+            <div class="kpi-value info-text" id="uniqueIpsCount">0</div>
+            <div class="kpi-footer">Tracked source IP addresses</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>TOTAL INGESTED EVENTS</span>
+              <span>📥</span>
+            </div>
+            <div class="kpi-value" id="totalEventsCount">0</div>
+            <div class="kpi-footer">Streaming NDJSON format</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>SUSPICIOUS / ATTACKS</span>
+              <span>⚠️</span>
+            </div>
+            <div class="kpi-value warning-text" id="highAlertsCount">0</div>
+            <div class="kpi-footer">MITRE T1110 / T1595 triggers</div>
+          </div>
+        </div>
+
+        <!-- Quick Summary Row: Mini Fleet + Quick IP Senders -->
+        <div class="grid-2col">
+          <!-- Mini Fleet Summary -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">🖥️ Active Cluster Fleet</span>
+              <button class="link-btn" onclick="switchTab('view-fleet')">View All &rarr;</button>
+            </div>
+            <div id="overviewFleetSummary" class="mini-fleet-list">
+              <div class="empty-state">No agent heartbeats recorded yet.</div>
+            </div>
+          </div>
+
+          <!-- Quick Top Senders List -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">🌐 Recent Request Inbound IPs</span>
+              <button class="link-btn" onclick="switchTab('view-ip-traffic')">Full IP List &rarr;</button>
+            </div>
+            <div id="overviewIpSummary" class="mini-ip-list">
+              <div class="empty-state">No incoming IP requests recorded yet.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Security Events Preview -->
+        <div class="panel-card" style="margin-top: 20px;">
+          <div class="panel-header">
+            <span class="panel-title">🛡️ Recent Security Events Stream</span>
+            <button class="link-btn" onclick="switchTab('view-events')">View Discover &rarr;</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="wazuh-table">
+              <thead>
+                <tr>
+                  <th width="130">TIME</th>
+                  <th width="140">SOURCE IP</th>
+                  <th width="140">NODE / AGENT</th>
+                  <th width="100">LEVEL</th>
+                  <th>EVENT DETAILS</th>
+                </tr>
+              </thead>
+              <tbody id="overviewRecentEventsBody">
+                <tr class="placeholder-row"><td colspan="5">Awaiting live event stream...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 2: AGENTS FLEET (HARDWARE TELEMETRY)             -->
+      <!-- ==================================================== -->
+      <section id="view-fleet" class="tab-pane">
+        <div class="section-title-bar">
+          <div>
+            <h3>Cluster Fleet Node Telemetry</h3>
+            <p>Real-time resource utilization, CPU, Memory heap, and disk usage per node</p>
+          </div>
+        </div>
+
+        <div id="fleetGrid" class="fleet-grid">
+          <div class="empty-state">Waiting for agent nodes (web-auth-01, api-catalog-02, order-service-03) to transmit data...</div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 3: INBOUND IP TRAFFIC (LIST CEK SEND REQUEST IP)  -->
+      <!-- ==================================================== -->
+      <section id="view-ip-traffic" class="tab-pane">
+        <div class="section-title-bar flex-between">
+          <div>
+            <h3>Inbound Request IP Tracker</h3>
+            <p>Daftar lengkap alamat IP pengirim request (Agent telemetry, web access logs, dan potensi penyerang)</p>
+          </div>
+          <div class="search-box">
+            <input type="text" id="ipFilterInput" placeholder="Filter by IP, Hostname, or Status...">
+          </div>
+        </div>
+
+        <!-- IP Stats Counters -->
+        <div class="kpi-grid" style="margin-bottom: 20px;">
+          <div class="kpi-card">
+            <div class="kpi-header"><span>TOTAL UNIQUE IPS</span><span>🔢</span></div>
+            <div class="kpi-value info-text" id="ipTabTotalCount">0</div>
+            <div class="kpi-footer">Distinct client senders</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>TOTAL REQUESTS RECEIVED</span><span>📈</span></div>
+            <div class="kpi-value" id="ipTabTotalRequests">0</div>
+            <div class="kpi-footer">Accumulated HTTP POST/GET requests</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>FLAGGED ATTACK IPS</span><span>⚠️</span></div>
+            <div class="kpi-value warning-text" id="ipTabFlaggedCount">0</div>
+            <div class="kpi-footer">Severity level &ge; 7</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>CONTAINED / BLOCKED</span><span>🛑</span></div>
+            <div class="kpi-value danger-text" id="ipTabBlockedCount">0</div>
+            <div class="kpi-footer">Dynamic iptables DROP status</div>
+          </div>
+        </div>
+
+        <!-- Full IP Tracker Table -->
+        <div class="panel-card">
+          <div class="table-wrapper">
+            <table class="wazuh-table">
+              <thead>
+                <tr>
+                  <th width="160">SOURCE IP ADDRESS</th>
+                  <th width="160">NODE / HOSTNAME</th>
+                  <th width="150">TRAFFIC CATEGORY</th>
+                  <th width="110">REQUESTS</th>
+                  <th width="130">FIRST SEEN</th>
+                  <th width="130">LAST SEEN</th>
+                  <th width="110">THREAT LEVEL</th>
+                  <th width="130">ZERO-TRUST ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="ipTableBody">
+                <tr class="placeholder-row">
+                  <td colspan="8">No source IP addresses registered yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 4: SECURITY EVENTS (WAZUH DISCOVER)              -->
+      <!-- ==================================================== -->
+      <section id="view-events" class="tab-pane">
+        <div class="section-title-bar flex-between">
+          <div>
+            <h3>Security Events & Discover Stream</h3>
+            <p>Live stream of incoming log transactions, Sigma detection alerts, and audit signatures</p>
+          </div>
+          <div class="search-box">
+            <input type="text" id="logFilter" placeholder="Filter by Agent, IP, or Event Signature...">
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="table-wrapper">
+            <table class="wazuh-table">
+              <thead>
+                <tr>
+                  <th width="120">TIMESTAMP</th>
+                  <th width="140">SOURCE IP</th>
+                  <th width="130">AGENT</th>
+                  <th width="110">LEVEL</th>
+                  <th>EVENT SIGNATURE / DESCRIPTION</th>
+                  <th width="150">MITRE TECHNIQUE</th>
+                  <th width="90">INSPECT</th>
+                </tr>
+              </thead>
+              <tbody id="eventsTableBody">
+                <tr class="placeholder-row">
+                  <td colspan="7">No security events captured yet. Waiting for stream input...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 5: ZERO-TRUST CONTAINMENT (IPTABLES)             -->
+      <!-- ==================================================== -->
+      <section id="view-containment" class="tab-pane">
+        <div class="section-title-bar">
+          <div>
+            <h3>Zero-Trust Dynamic Containment Engine</h3>
+            <p>Automated and manual host isolation via Linux <code>iptables</code> packet filtering</p>
+          </div>
+        </div>
+
+        <div class="grid-2col">
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">🛡️ Active Containment Rules</span>
+            </div>
+            <div id="containmentList" class="containment-list">
+              <div class="empty-state">No IP addresses currently under quarantine or blocked.</div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">⚙️ Zero-Trust Engine Architecture</span>
+            </div>
+            <div style="font-size: 12px; color: #94a3b8; line-height: 1.7; padding: 6px 0;">
+              <p><strong>Continuous Verification:</strong> Every inbound packet and agent heartbeat is verified against baseline Sigma anomaly thresholds.</p>
+              <p style="margin-top: 8px;"><strong>Dynamic Containment:</strong> When a source IP exceeds brute-force thresholds (T1110) or network scanning rate (T1595), the SIEM issues a localized <code>iptables -I INPUT -s &lt;IP&gt; -j DROP</code> rule.</p>
+              <p style="margin-top: 8px;"><strong>Resource Constraint:</strong> In-kernel packet dropping prevents resource starvation on servers with 1-2 GB RAM.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modal Raw JSON Inspector -->
+  <div id="jsonModal" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>🔍 Raw Event Detail (NDJSON)</h3>
+        <button id="closeModalBtn" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre id="modalJsonContent"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

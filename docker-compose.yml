@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. SIEM Central Collector & Dashboard
+  # ==========================================
+  center-siem:
+    build:
+      context: ./CenterServer
+      dockerfile: Dockerfile
+    container_name: center-siem
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    networks:
+      - siem-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 2. Node Agent 1 (Auth Service)
+  # ==========================================
+  web-node-1:
+    build:
+      context: ./client/server-1
+      dockerfile: Dockerfile
+    container_name: web-node-1
+    ports:
+      - "3001:3000"
+    volumes:
+      - web1_logs:/app/logs
+    networks:
+      - siem-network
+    restart: unless-stopped
+
+  agent-node-1:
+    build:
+      context: ./client/agent
+      dockerfile: Dockerfile
+    container_name: agent-node-1
+    hostname: web-auth-01
+    environment:
+      - AUTH_SERVER_URL=http://center-siem:8080/api/v1/agent/heartbeat
+      - LOG_PATH=/var/log/app/app.log
+    volumes:
+      - web1_logs:/var/log/app:ro
+    depends_on:
+      - center-siem
+      - web-node-1
+    networks:
+      - siem-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 3. Node Agent 2 (Catalog Service)
+  # ==========================================
+  web-node-2:
+    build:
+      context: ./client/server-2
+      dockerfile: Dockerfile
+    container_name: web-node-2
+    ports:
+      - "3002:3000"
+    volumes:
+      - web2_logs:/app/logs
+    networks:
+      - siem-network
+    restart: unless-stopped
+
+  agent-node-2:
+    build:
+      context: ./client/agent
+      dockerfile: Dockerfile
+    container_name: agent-node-2
+    hostname: api-catalog-02
+    environment:
+      - AUTH_SERVER_URL=http://center-siem:8080/api/v1/agent/heartbeat
+      - LOG_PATH=/var/log/app/app.log
+    volumes:
+      - web2_logs:/var/log/app:ro
+    depends_on:
+      - center-siem
+      - web-node-2
+    networks:
+      - siem-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 4. Node Agent 3 (Order Service)
+  # ==========================================
+  web-node-3:
+    build:
+      context: ./client/server-3
+      dockerfile: Dockerfile
+    container_name: web-node-3
+    ports:
+      - "3003:3000"
+    volumes:
+      - web3_logs:/app/logs
+    networks:
+      - siem-network
+    restart: unless-stopped
+
+  agent-node-3:
+    build:
+      context: ./client/agent
+      dockerfile: Dockerfile
+    container_name: agent-node-3
+    hostname: order-service-03
+    environment:
+      - AUTH_SERVER_URL=http://center-siem:8080/api/v1/agent/heartbeat
+      - LOG_PATH=/var/log/app/app.log
+    volumes:
+      - web3_logs:/var/log/app:ro
+    depends_on:
+      - center-siem
+      - web-node-3
+    networks:
+      - siem-network
+    restart: unless-stopped
+
+volumes:
+  web1_logs:
+  web2_logs:
+  web3_logs:
+
+networks:
+  siem-network:
+    driver: bridge

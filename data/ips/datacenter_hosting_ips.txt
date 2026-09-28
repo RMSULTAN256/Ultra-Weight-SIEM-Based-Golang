@@ -1,0 +1,58 @@
+# ==============================================================================
+# DATASET EXAMPLE IP: DATACENTER & CLOUD HOSTING
+# IP-IP ini berasal dari provider Cloud/Hosting (AWS, DigitalOcean, Hetzner, dll).
+# Pada API Threat Intel (services/ipapi.go), IP ini akan terdeteksi: "hosting": true
+# ==============================================================================
+# DigitalOcean
+159.65.132.84
+167.99.64.12
+134.209.100.55
+178.62.204.108
+128.199.202.140
+
+# Amazon Web Services (AWS EC2)
+54.239.28.85
+52.28.63.250
+3.120.0.1
+13.228.0.15
+18.138.0.22
+
+# Google Cloud Platform (GCP)
+35.240.128.10
+34.87.12.50
+35.198.200.15
+34.101.40.8
+104.196.0.2
+
+# Hetzner Online (Germany/Finland)
+168.119.10.45
+159.69.80.120
+78.47.120.30
+88.99.140.5
+136.243.50.20
+
+# Microsoft Azure
+20.198.12.34
+51.144.100.22
+13.76.120.15
+40.83.10.5
+104.215.0.12
+
+# Linode / Akamai Connected Cloud
+172.104.40.18
+139.162.20.15
+178.79.140.8
+45.79.100.12
+
+# OVHcloud (France/Canada)
+147.135.10.20
+51.77.100.15
+198.27.80.30
+54.39.120.40
+
+# Alibaba Cloud (Aliyun)
+47.241.10.25
+8.210.40.12
+47.88.100.5
+149.129.50.18
+

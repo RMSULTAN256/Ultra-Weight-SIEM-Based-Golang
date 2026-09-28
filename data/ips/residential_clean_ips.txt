@@ -1,0 +1,67 @@
+# ==============================================================================
+# DATASET EXAMPLE IP: RESIDENTIAL & MOBILE ISP (TRAFIK PENGGUNA ASLI/NORMAL)
+# IP-IP ini berasal dari provider ISP perumahan/seluler (Telkom, Biznet, dll).
+# Pada API Threat Intel (services/ipapi.go), IP ini terdeteksi: "hosting": false, "proxy": false
+# ==============================================================================
+# PT Telkom Indonesia (IndiHome / Speedy)
+180.241.211.86
+180.241.211.26
+36.76.6.162
+36.76.3.50
+36.76.4.164
+36.76.0.2
+36.76.3.56
+125.160.10.25
+110.138.45.12
+
+# PT Telekomunikasi Selular (Telkomsel)
+114.10.85.163
+114.10.81.3
+114.122.10.45
+114.124.50.12
+182.2.7.212
+182.2.4.64
+182.2.6.43
+182.2.5.176
+182.2.5.112
+
+# PT Biznet Gio Nusantara (Biznet Networks)
+103.144.38.92
+103.166.122.209
+202.154.188.106
+182.253.10.55
+103.247.10.12
+
+# PT XL Axiata Tbk
+112.215.245.88
+112.215.175.226
+112.215.148.243
+112.215.148.190
+112.215.148.216
+112.215.148.199
+112.215.148.100
+112.215.148.98
+
+# PT Indosat Tbk (IM3 / Ooredoo Hutchison)
+140.213.200.6
+140.213.202.42
+140.213.200.122
+140.213.202.40
+140.213.202.209
+140.213.200.59
+140.213.202.84
+140.213.143.116
+
+# PT Cyberindo Aditama (CBN)
+202.158.10.4
+202.158.40.12
+
+# PT Mora Telematika Indonesia (Oxygen.id)
+103.28.14.22
+103.28.15.50
+
+# International Residential (Comcast, Deutsche Telekom, SingTel)
+73.189.120.45
+84.116.40.12
+219.92.10.55
+
