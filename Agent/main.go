@@ -1,6 +1,7 @@
 package main
 
 import (
+	"agent/config"
 	"agent/services"
 	"fmt"
 	"os"
@@ -10,20 +11,48 @@ import (
 func main() {
 
 	agentClient := os.Getenv("HOSTNAME_NAME")
-	serverEndpoint := os.Getenv("AUTH_SERVER_URL")
-
-	collector := services.NewMetricCollector(agentClient, serverEndpoint, 0)
-
-	if serverEndpoint == "" {
-		serverEndpoint = "https://gowaz.vulnstack.xyz/api/v1/agent/heartbeat"
+	if agentClient == "" {
+		agentClient = "ubuntu"
+	}
+	baseURL := os.Getenv("SERVER_URL")
+	if baseURL == "" {
+		baseURL = "https://gowaz.vulnstack.xyz"
 	}
 
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	heartBeatUrl := baseURL + "/api/v1/agent/heartbeat"
+
+	collector := services.NewMetricCollector(agentClient, heartBeatUrl, 0)
+	logCfg, err := config.LoadConfig("config/log_collector.json")
+	if err != nil {
+		fmt.Println("Failed to load, logs config not found")
+	}
+
+	logScanner := services.NewLogCollector(baseURL, agentClient)
+
+	if logCfg != nil {
+		scanInterval := logCfg.ScanIntervalSec
+		if scanInterval <= 0 {
+			scanInterval = 5
+		}
+
+		go func() {
+			logTicker := time.NewTicker(time.Duration(scanInterval) * time.Second)
+			defer logTicker.Stop()
+			fmt.Printf("[LOG] Active, Monitoring %d target log every %d second", len(logCfg.Targets), scanInterval)
+
+			for range logTicker.C {
+				for _, target := range logCfg.Targets {
+					logScanner.ScanTarget(target)
+				}
+			}
+		}()
+	}
+	heartbeatTicker := time.NewTicker(2 * time.Second)
+	defer heartbeatTicker.Stop()
 
 	fmt.Println("Agent pengawas aktif. Mengirim status setiap detik...")
 
-	for range ticker.C {
+	for range heartbeatTicker.C {
 		metrics, err := collector.CollectMetrics()
 		if err != nil {
 			fmt.Printf("[ERROR] Gagal membaca metrik: %v\n", err)

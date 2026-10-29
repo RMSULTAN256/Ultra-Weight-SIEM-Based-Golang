@@ -1,0 +1,15 @@
+{
+    "scan_interval": 5,
+    "targets": [
+        {
+             "app_name": "Nginx Web",
+            "file_path": "/var/log/nginx/*.log",
+            "keywords": ["403", "404", "union select", "eval("]
+        },
+        {
+             "app_name": "SSH Auth",
+            "file_path": "/var/log/auth.log",
+            "keywords": ["failed password", "Invalid user"]
+        }
+    ]
+}
