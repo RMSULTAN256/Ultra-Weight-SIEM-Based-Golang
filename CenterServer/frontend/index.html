@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wazuh-Lean | Ultra-Lightweight SIEM SOC Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- ======================================================== -->
+  <!-- LEFT SIDEBAR NAVBAR (Wazuh-Style Side Navigation)        -->
+  <!-- ======================================================== -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="wazuh-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00a4e4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">WAZUH <span class="brand-sub">LEAN</span></div>
+        <div class="brand-badge">MINI-SIEM SOC</div>
+      </div>
+    </div>
+
+    <!-- Navigation Menu Items -->
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">SECURITY OPERATIONS</div>
+
+      <button class="nav-item active" data-target="view-overview">
+        <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="9"/>
+          <rect x="14" y="3" width="7" height="5"/>
+          <rect x="14" y="12" width="7" height="9"/>
+          <rect x="3" y="16" width="7" height="5"/>
+        </svg>
+        <span>Overview</span>
+      </button>
+
+      <button class="nav-item" data-target="view-fleet">
+        <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+          <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+          <line x1="6" y1="6" x2="6.01" y2="6"/>
+          <line x1="6" y1="18" x2="6.01" y2="18"/>
+        </svg>
+        <span>Agents Fleet</span>
+        <span class="badge-count" id="navAgentCount">0</span>
+      </button>
+
+      <button class="nav-item" data-target="view-ip-traffic">
+        <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <span>Inbound IP Traffic</span>
+        <span class="badge-count info-badge" id="navIpCount">0</span>
+      </button>
+
+      <button class="nav-item" data-target="view-events">
+        <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Security Events</span>
+        <span class="badge-count" id="navEventCount">0</span>
+      </button>
+
+      <div class="nav-section-title" style="margin-top: 18px;">CONTAINMENT & AUDIT</div>
+
+      <button class="nav-item" data-target="view-containment">
+        <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span>Zero-Trust iptables</span>
+        <span class="badge-count danger-badge" id="navBlockedCount">0</span>
+      </button>
+    </nav>
+
+    <!-- Sidebar Bottom Status Footer -->
+    <div class="sidebar-footer">
+      <div class="footer-stat">
+        <span class="footer-label">RAM ENGINE</span>
+        <strong id="ramStat" class="text-success">&lt; 25 MB / 80 MB RSS</strong>
+      </div>
+      <div class="footer-stat">
+        <span class="footer-label">STREAM STATUS</span>
+        <span class="stream-indicator">
+          <span class="dot" id="sideStreamDot"></span>
+          <span id="sideStreamText">Connecting...</span>
+        </span>
+      </div>
+      <div class="analyst-info">
+        <div class="analyst-user">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span id="userProfileName">D4 RKS Analyst</span>
+        </div>
+        <button id="btnLogout" class="btn-logout" title="Keluar / Logout" onclick="handleLogout()">Keluar</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ======================================================== -->
+  <!-- MAIN CONTENT AREA                                        -->
+  <!-- ======================================================== -->
+  <main class="main-wrapper">
+    <!-- Top Header Bar -->
+    <header class="topbar">
+      <div class="topbar-title">
+        <h2 id="currentViewTitle">Security Operations Overview</h2>
+        <span class="topbar-sub">Central Log Collector &amp; Real-Time Threat Mitigation Engine</span>
+      </div>
+      <div class="topbar-tools">
+        <div class="cluster-pill">
+          <span class="status-indicator-dot green"></span>
+          <span>Cluster: <strong>Docker Dev Grid</strong></span>
+        </div>
+        <div class="stream-pill" id="topStreamPill">
+          <span class="stream-live-dot" id="topStreamDot"></span>
+          <span id="topStreamStatus">LIVE STREAM</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="content-scroll">
+      <!-- ==================================================== -->
+      <!-- TAB 1: OVERVIEW DASHBOARD                            -->
+      <!-- ==================================================== -->
+      <section id="view-overview" class="tab-pane active">
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>MONITORED AGENTS</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
+              </svg>
+            </div>
+            <div class="kpi-value"><span id="activeAgentsCount">0</span> <small id="agentFleetSubtext">Active Node</small></div>
+            <div class="kpi-footer" id="agentTagsSummary">Waiting for node heartbeats...</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>UNIQUE SENDER IPS</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+              </svg>
+            </div>
+            <div class="kpi-value info-text" id="uniqueIpsCount">0</div>
+            <div class="kpi-footer">Tracked source IP addresses</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>TOTAL INGESTED EVENTS</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </div>
+            <div class="kpi-value" id="totalEventsCount">0</div>
+            <div class="kpi-footer" id="bufferCapacityOverview">Buffer: 0 / 1,000 in memory</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span>SUSPICIOUS / ATTACKS</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="kpi-value warning-text" id="highAlertsCount">0</div>
+            <div class="kpi-footer">MITRE T1110 / T1595 triggers</div>
+          </div>
+        </div>
+
+        <!-- Quick Summary Row: Mini Fleet + Quick IP Senders -->
+        <div class="grid-2col">
+          <!-- Mini Fleet Summary -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">Active Cluster Fleet</span>
+              <button class="link-btn" onclick="switchTab('view-fleet')">View All Nodes &rarr;</button>
+            </div>
+            <div id="overviewFleetSummary" class="mini-fleet-list">
+              <div class="empty-state">No agent heartbeats recorded yet.</div>
+            </div>
+          </div>
+
+          <!-- Quick Top Senders List -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">Recent Inbound IPs</span>
+              <button class="link-btn" onclick="switchTab('view-ip-traffic')">Full IP List &rarr;</button>
+            </div>
+            <div id="overviewIpSummary" class="mini-ip-list">
+              <div class="empty-state">No incoming IP requests recorded yet.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Security Events Preview -->
+        <div class="panel-card" style="margin-top: 20px;">
+          <div class="panel-header">
+            <div>
+              <span class="panel-title">Recent Security Events Stream</span>
+              <span class="panel-sub">Showing newest events from the 1,000-event ring buffer</span>
+            </div>
+            <button class="link-btn" onclick="switchTab('view-events')">Open Discover (Full 1,000 Logs) &rarr;</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="wazuh-table">
+              <thead>
+                <tr>
+                  <th width="130">TIME</th>
+                  <th width="140">SOURCE IP</th>
+                  <th width="140">NODE / AGENT</th>
+                  <th width="110">LEVEL</th>
+                  <th>EVENT DETAILS</th>
+                  <th width="140">MITRE</th>
+                  <th width="85">INSPECT</th>
+                </tr>
+              </thead>
+              <tbody id="overviewRecentEventsBody">
+                <tr class="placeholder-row"><td colspan="7">Loading events from buffer...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Overview Pagination Bar -->
+          <div class="pagination-bar" id="overviewPaginationBar">
+            <div class="pagination-info" id="overviewPaginationInfo">
+              Showing 0 to 0 of 0 events
+            </div>
+            <div class="pagination-controls" id="overviewPaginationControls">
+              <!-- Dynamically injected page buttons -->
+            </div>
+            <div class="pagination-size">
+              <label for="overviewPageSize">Per page:</label>
+              <select id="overviewPageSize" class="select-page-size">
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 2: AGENTS FLEET (HARDWARE TELEMETRY)             -->
+      <!-- ==================================================== -->
+      <section id="view-fleet" class="tab-pane">
+        <div class="section-title-bar flex-between">
+          <div>
+            <h3>Cluster Fleet Node Telemetry</h3>
+            <p>Real-time resource utilization, CPU, Memory heap, and disk usage per monitored node</p>
+          </div>
+          <div>
+            <button class="btn-secondary" onclick="loadInitialAgents()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px;">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Refresh Nodes
+            </button>
+          </div>
+        </div>
+
+        <div id="fleetGrid" class="fleet-grid">
+          <div class="empty-state">Waiting for agent nodes (web-auth-01, api-catalog-02, order-service-03) to transmit telemetry...</div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 3: INBOUND IP TRAFFIC (LIST CEK SEND REQUEST IP)  -->
+      <!-- ==================================================== -->
+      <section id="view-ip-traffic" class="tab-pane">
+        <div class="section-title-bar flex-between">
+          <div>
+            <h3>Inbound Request IP Tracker</h3>
+            <p>Comprehensive ledger of client request sources, agent senders, and detected scan origins</p>
+          </div>
+          <div class="toolbar-actions">
+            <div class="search-box">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" id="ipFilterInput" placeholder="Filter by IP, Hostname, or Status...">
+            </div>
+            <button class="btn-secondary" onclick="loadInitialIPs()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- IP Stats Counters -->
+        <div class="kpi-grid" style="margin-bottom: 20px;">
+          <div class="kpi-card">
+            <div class="kpi-header"><span>TOTAL UNIQUE IPS</span></div>
+            <div class="kpi-value info-text" id="ipTabTotalCount">0</div>
+            <div class="kpi-footer">Distinct client senders</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>TOTAL REQUESTS RECEIVED</span></div>
+            <div class="kpi-value" id="ipTabTotalRequests">0</div>
+            <div class="kpi-footer">Accumulated HTTP POST/GET requests</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>FLAGGED ATTACK IPS</span></div>
+            <div class="kpi-value warning-text" id="ipTabFlaggedCount">0</div>
+            <div class="kpi-footer">Severity level &ge; 7</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>CONTAINED / BLOCKED</span></div>
+            <div class="kpi-value danger-text" id="ipTabBlockedCount">0</div>
+            <div class="kpi-footer">Dynamic iptables DROP status</div>
+          </div>
+        </div>
+
+        <!-- Full IP Tracker Table -->
+        <div class="panel-card">
+          <div class="table-wrapper">
+            <table class="wazuh-table">
+              <thead>
+                <tr>
+                  <th width="160">SOURCE IP ADDRESS</th>
+                  <th width="160">NODE / HOSTNAME</th>
+                  <th width="150">TRAFFIC CATEGORY</th>
+                  <th width="110">REQUESTS</th>
+                  <th width="120">FIRST SEEN</th>
+                  <th width="120">LAST SEEN</th>
+                  <th width="110">THREAT LEVEL</th>
+                  <th width="140">ZERO-TRUST ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="ipTableBody">
+                <tr class="placeholder-row">
+                  <td colspan="8">No source IP addresses registered yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- IP Pagination Bar -->
+          <div class="pagination-bar" id="ipPaginationBar">
+            <div class="pagination-info" id="ipPaginationInfo">
+              Showing 0 of 0 IP addresses
+            </div>
+            <div class="pagination-controls" id="ipPaginationControls">
+              <!-- Dynamically injected buttons -->
+            </div>
+            <div class="pagination-size">
+              <label for="ipPageSize">Rows:</label>
+              <select id="ipPageSize" class="select-page-size">
+                <option value="10">10</option>
+                <option value="15" selected>15</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 4: SECURITY EVENTS (WAZUH DISCOVER)              -->
+      <!-- ==================================================== -->
+      <section id="view-events" class="tab-pane">
+        <div class="section-title-bar flex-between">
+          <div>
+            <h3>Security Events &amp; Discover Stream</h3>
+            <p>Live stream of incoming log transactions, Sigma detection alerts, and audit signatures (Capped to 1,000 FIFO)</p>
+          </div>
+          <div class="buffer-indicator-badge">
+            <span class="buffer-dot"></span>
+            <span id="bufferStatusText">Ring Buffer: 0 / 1,000 logs</span>
+          </div>
+        </div>
+
+        <!-- Discovery Toolbar -->
+        <div class="events-toolbar">
+          <!-- Search box -->
+          <div class="search-box events-search">
+            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="logFilter" placeholder="Search across IP, Agent, Message, Mitre ID...">
+            <button id="clearLogFilterBtn" class="clear-search-btn hidden" title="Clear filter">&times;</button>
+          </div>
+
+          <!-- Severity Filter Pills -->
+          <div class="filter-pills">
+            <button class="pill-btn active" data-severity="ALL">All</button>
+            <button class="pill-btn pill-danger" data-severity="CRITICAL">Critical</button>
+            <button class="pill-btn pill-warning" data-severity="SUSPICIOUS">Warning</button>
+            <button class="pill-btn pill-info" data-severity="INFO">Info</button>
+          </div>
+
+          <!-- Live Pause / Resume -->
+          <div class="toolbar-right-group">
+            <button id="btnToggleLive" class="btn-live active" title="Toggle automatic table update on incoming events">
+              <span class="live-dot-pulse"></span>
+              <span id="liveBtnText">Live Stream</span>
+            </button>
+            <button id="btnRefreshLogs" class="btn-secondary" title="Re-fetch last 1,000 events from server">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              <span>Reload</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- New Events Toast Indicator (Appears when paused or on page > 1) -->
+        <div id="newEventsNotice" class="new-events-notice hidden" onclick="jumpToNewestEvents()">
+          <span>&uarr; <strong id="newEventsCount">0</strong> new events received &mdash; Click to view latest</span>
+        </div>
+
+        <div class="panel-card">
+          <div class="table-wrapper">
+            <table class="wazuh-table">
+              <thead>
+                <tr>
+                  <th width="130">TIMESTAMP</th>
+                  <th width="140">SOURCE IP</th>
+                  <th width="130">AGENT</th>
+                  <th width="110">LEVEL</th>
+                  <th>EVENT SIGNATURE / DESCRIPTION</th>
+                  <th width="150">MITRE TECHNIQUE</th>
+                  <th width="85">INSPECT</th>
+                </tr>
+              </thead>
+              <tbody id="eventsTableBody">
+                <tr class="placeholder-row">
+                  <td colspan="7">Loading security events from buffer...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Events Pagination Bar -->
+          <div class="pagination-bar">
+            <div class="pagination-info" id="eventsPaginationInfo">
+              Showing 0 to 0 of 0 events
+            </div>
+            <div class="pagination-controls" id="eventsPaginationControls">
+              <!-- Dynamically injected page buttons -->
+            </div>
+            <div class="pagination-size">
+              <label for="eventsPageSize">Per page:</label>
+              <select id="eventsPageSize" class="select-page-size">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 5: ZERO-TRUST CONTAINMENT (IPTABLES)             -->
+      <!-- ==================================================== -->
+      <section id="view-containment" class="tab-pane">
+        <div class="section-title-bar">
+          <div>
+            <h3>Zero-Trust Dynamic Containment Engine</h3>
+            <p>Automated and manual host isolation via Linux <code>iptables</code> packet filtering</p>
+          </div>
+        </div>
+
+        <div class="grid-2col">
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">Active Containment Rules</span>
+              <span class="badge-count danger-badge" id="containmentBadgeCount">0 Blocked</span>
+            </div>
+            <div id="containmentList" class="containment-list">
+              <div class="empty-state">No IP addresses currently under quarantine or blocked.</div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-title">Zero-Trust Engine Architecture (NIST SP 800-207)</span>
+            </div>
+            <div class="zero-trust-explainer">
+              <p><strong>Continuous Verification:</strong> Every inbound packet and agent heartbeat is verified against baseline Sigma anomaly thresholds.</p>
+              <p><strong>Policy Decision Point (PDP):</strong> Center SIEM analyzes the sliding window correlation state across nodes in memory.</p>
+              <p><strong>Policy Enforcement Point (PEP):</strong> When a source IP exceeds brute-force thresholds (T1110) or network scanning rate (T1595), the SIEM issues a localized <code>iptables -I INPUT -s &lt;IP&gt; -j DROP</code> rule.</p>
+              <p><strong>Resource Optimization:</strong> In-kernel packet dropping prevents resource starvation on servers with 1-2 GB RAM, keeping CPU footprint minimal.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modal Raw JSON Inspector -->
+  <div id="jsonModal" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a4e4" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <h3>Raw Event Detail (NDJSON)</h3>
+        </div>
+        <button id="closeModalBtn" class="close-btn" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre id="modalJsonContent"></pre>
+      </div>
+      <div class="modal-footer">
+        <button id="copyJsonBtn" class="btn-secondary">Copy JSON</button>
+        <button onclick="document.getElementById('jsonModal').classList.add('hidden')" class="btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

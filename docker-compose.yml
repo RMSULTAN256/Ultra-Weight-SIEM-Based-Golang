@@ -10,19 +10,43 @@ services:
       dockerfile: Dockerfile
     container_name: center-siem
     ports:
-      - "8080:8080"
+      - "8085:8082"
     environment:
-      - PORT=8080
+      - PORT=8082
+      - DB_PATH=/CenterServer/siem.db
+    volumes:
+      - center_data:/app/data
     networks:
       - siem-network
     restart: unless-stopped
+  
+  nginx:
+    image: nginx:alpine
+    container_name: web-nginx
+    restart: always
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs:/var/log/nginx
+    depends_on:
+      - center-siem
+    networks:
+      - siem-network
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: tunnel-cf
+    restart: always
+    command: tunnel --no-autoupdate run --token eyJhIjoiZTAyNTc2MDQwNmU2OWRjOGZlMmRmY2IyMjE0NDFiMjkiLCJ0IjoiYzc1YjdiZDctZGU0Zi00YWFmLTk0MzAtYmVjNzdhOWNlOTZlIiwicyI6Ik5qUXlNemxtTTJRdE56STBZeTAwT0RGbUxUazJPR1l0WlRJd1lXSmtPR0V5TURReiJ9
+    depends_on:
+      - nginx
+    networks:
+      - siem-network
 
   # ==========================================
   # 2. Node Agent 1 (Auth Service)
   # ==========================================
   web-node-1:
     build:
-      context: ./client/server-1
+      context: ./Client/server-1
       dockerfile: Dockerfile
     container_name: web-node-1
     ports:
@@ -35,13 +59,15 @@ services:
 
   agent-node-1:
     build:
-      context: ./client/agent
+      context: ./Client/agent
       dockerfile: Dockerfile
     container_name: agent-node-1
     hostname: web-auth-01
     environment:
-      - AUTH_SERVER_URL=http://center-siem:8080/api/v1/agent/heartbeat
+      - AUTH_SERVER_URL=http://center-siem:8082/api/v1/agent/heartbeat
+      - RAM_LIMIT_MB=512
       - LOG_PATH=/var/log/app/app.log
+    mem_limit: 512m
     volumes:
       - web1_logs:/var/log/app:ro
     depends_on:
@@ -56,7 +82,7 @@ services:
   # ==========================================
   web-node-2:
     build:
-      context: ./client/server-2
+      context: ./Client/server-2
       dockerfile: Dockerfile
     container_name: web-node-2
     ports:
@@ -69,13 +95,15 @@ services:
 
   agent-node-2:
     build:
-      context: ./client/agent
+      context: ./Client/agent
       dockerfile: Dockerfile
     container_name: agent-node-2
     hostname: api-catalog-02
     environment:
-      - AUTH_SERVER_URL=http://center-siem:8080/api/v1/agent/heartbeat
+      - AUTH_SERVER_URL=http://center-siem:8082/api/v1/agent/heartbeat
+      - RAM_LIMIT_MB=1024
       - LOG_PATH=/var/log/app/app.log
+    mem_limit: 1024m
     volumes:
       - web2_logs:/var/log/app:ro
     depends_on:
@@ -90,7 +118,7 @@ services:
   # ==========================================
   web-node-3:
     build:
-      context: ./client/server-3
+      context: ./Client/server-3
       dockerfile: Dockerfile
     container_name: web-node-3
     ports:
@@ -103,13 +131,15 @@ services:
 
   agent-node-3:
     build:
-      context: ./client/agent
+      context: ./Client/agent
       dockerfile: Dockerfile
     container_name: agent-node-3
     hostname: order-service-03
     environment:
-      - AUTH_SERVER_URL=http://center-siem:8080/api/v1/agent/heartbeat
+      - AUTH_SERVER_URL=http://center-siem:8082/api/v1/agent/heartbeat
+      - RAM_LIMIT_MB=1024
       - LOG_PATH=/var/log/app/app.log
+    mem_limit: 1024m
     volumes:
       - web3_logs:/var/log/app:ro
     depends_on:
@@ -120,6 +150,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  center_data:
   web1_logs:
   web2_logs:
   web3_logs:

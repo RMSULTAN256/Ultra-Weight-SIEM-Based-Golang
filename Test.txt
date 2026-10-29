@@ -1,2 +1,0 @@
-[2026-09-16 21:59:29] {"text":"Halo yang disana"}
-[2026-09-16 21:59:34] {"text":"Halo yang disana"}

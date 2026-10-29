@@ -1,0 +1,10 @@
+{
+    "go.toolsEnvVars": {
+        "GOOS": "linux",
+        "CGO_ENABLED": "0",
+        "GOARCH": "amd64"
+    },
+     "editor.inlayHints.enabled": "on",
+    "go.inlayHints.assignVariableTypes": true,
+    "go.inlayHints.parameterNames": true
+}

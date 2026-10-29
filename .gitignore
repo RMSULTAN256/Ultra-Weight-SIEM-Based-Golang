@@ -1,5 +1,45 @@
+# Environment & Secrets
 .env
-catatan/
-artikel/
-learn/
-RealKABIL
+*.env
+
+# Compiled Binaries (Wajib di-ignore)
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*-linux
+*-app
+GEMINI.md
+.agents
+.vscode
+
+# Runtime Data & Logs (Kecuali dataset mentah di data/logs/)
+*.ndjson
+*.log
+/app/logs/
+CenterServer/heartbeat.ndjson
+CenterServer/events.ndjson
+
+# Database SQLite
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Folder Khusus / Non-Code
+artikel
+backup
+catatan
+cratch
+gambar
+learn
+Report
+
+# IDE & OS Artifacts
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+

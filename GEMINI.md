@@ -178,16 +178,136 @@ Dokumen ini mencatat seluruh riwayat diskusi, konteks arsitektur proyek Mini-SIE
 
 ---
 
+### 🔹 Sesi 18: Rancang Bangun Multi-Node Cluster, Agent Telemetry, Inbound IP Tracker, & Dashboard Wazuh-Style
+- **User:** Membahas evaluasi format log (`Marshal` vs `MarshalIndent`), efisiensi alokasi memori binary Go, implementasi simulasi multi-server Docker, pembuatan 3 agent dan 3 web target, pembuatan dashboard real-time bertema Wazuh, penambahan navbar sidebar dan pelacak IP pengirim request (`Inbound IP Traffic`), evaluasi penggunaan Redis/Kafka, serta pembersihan berkas pada `.gitignore`.
+- **Hasil:**
+  - **Audit Format Log:** Mengganti `MarshalIndent` dengan format standar NDJSON (`heartbeat.ndjson` dan `events.ndjson`) guna mencegah korupsi file log dan menghemat alokasi memori.
+  - **Simulasi Multi-Node Docker (7 Container):** Mengonfigurasi `docker-compose.yml` yang mengorkestrasi `center-siem` (port 8080), 3 service web target (`web-node-1`, `web-node-2`, `web-node-3`), dan 3 container agent pendamping (`agent-node-1`, `agent-node-2`, `agent-node-3`) dengan shared log volumes read-only.
+  - **Dashboard Web Wazuh-Lean:** Membangun antarmuka modern bertema Wazuh Dark SOC menggunakan Go `embed.FS` dan streaming satu arah Server-Sent Events (SSE). Dilengkapi sidebar navbar vertikal dengan 5 menu (Overview, Agents Fleet, Inbound IP Traffic, Security Events, dan Zero-Trust iptables).
+  - **Inbound IP Traffic Tracker:** Menyediakan pelacakan IP pengirim request secara dinamis, counter akumulasi request, kategori lalu lintas, tingkat ancaman, serta tombol aksi isolasi firewall `iptables`.
+  - **Penyusunan Dokumentasi:** Berkas catatan detail sesi dibuat di **`catatan/06_sesi_arsitektur_multi_node_dan_wazuh_dashboard.md`**.
+
+---
+
+### 🔹 Sesi 19: Pengadaan Custom Skills untuk Riset, Proposal, & Laporan TA (Polibatam Standard)
+- **User:** Meminta penambahan *skills* untuk membantu riset literatur, pembuatan laporan tugas akhir, dan proposal TA.
+- **Hasil:**
+  - Telah dibuat dan dipasang 4 spesialisasi *custom skills* (tersimpan di konfigurasi global `~/.gemini/config/skills/` dan workspace `.agents/skills/`):
+    1. **`polibatam-academic-writer`**: Panduan & audit gaya penulisan akademik sesuai Pedoman TA Polibatam (margin 4-4-3-3, font TNR 12pt 1.5 spasi, PUEBI/KBBI, kalimat pasif ilmiah, keselarasan 1:1 Rumusan-Tujuan-Kesimpulan, struktur Bab 1–5, tabel 4 kolom, dan hipotesis formal).
+    2. **`docx-report-generator`**: Otomatisasi pembentukan & pembaruan berkas Word (`.docx`) menggunakan `python-docx` tanpa merusak margin atau layout resmi kampus.
+    3. **`academic-citation-manager`**: Manajemen & audit sitasi (IEEE & APA 7th style), validasi DOI/ISSN, generator format BibTeX/RIS untuk Mendeley/Zotero, serta audit kelengkapan sitasi 2 arah.
+    4. **`cyber-benchmark-analyzer`**: Evaluator metrik pengujian Bab 4 TA SIEM (Throughput EPS, profiling memori RAM < 80MB, latensi respon MTTR, dan matriks konfusi deteksi Precision/Recall).
+
+---
+
+### 🔹 Sesi 20: Audit Lanjutan Proposal Word & Rancang Bangun Diagram Arsitektur Komprehensif Bab 3
+- **User:** Meminta audit berkas proposal terkini (`4332201024_Sultan Arif Syaidinah_Update.docx`), evaluasi diagram `Agent 1.png`, konfirmasi klasifikasi jenis diagram vs arsitektur, serta pembuatan diagram baru yang mencakup seluruh alur secara lengkap (*end-to-end*).
+- **Hasil:**
+  - **Audit Berkas Proposal:** Mengonfirmasi perbaikan nomor Bab 3 (*Metodologi Penelitian*), refresh Daftar Isi, perbaikan rumusan Hipotesis ($H_a/H_0$ berpasangan), dan mengidentifikasi hal minor (typo "Sumber Data" $\rightarrow$ "Sumber Daya", pembersihan teks draft instruksi, serta penghapusan bab kesimpulan di dokumen proposal).
+  - **Konfirmasi Istilah:** Menjelaskan bahwa berkas tersebut secara tepat adalah **Diagram Arsitektur Sistem / Software Architecture Block Diagram** yang sangat berbobot untuk Bab 3.3.1 TA D4 RKS.
+  - **Generasi Diagram Arsitektur & Alir Kerja Lengkap (Bab 3.1):**
+    - Berhasil merancang diagram vektor SVG (`gambar/diagram_arsitektur_dan_alur_siem.svg`) dan merender PNG resolusi tinggi (`gambar/diagram_arsitektur_dan_alur_siem.png`, 1640x1100 px).
+    - Memvisualisasikan 4 zona lengkap: Zona 1 Sumber Trafik (Attacker T1110/T1595 vs Legitimate User), Zona 2 Target Infrastruktur PEP (Node 1 Auth, Node 2 Catalog, Node 3 Order dengan Web App, Agent Go, dan iptables/L7 Blacklist), Zona 3 SIEM Central Engine PDP (Ingestion Gateway, In-Stream Pipeline 4 Tahap, Ambang Batas Decision Point), serta Zona 4 Output (SOC Dashboard SSE, Preservasi Forensik `alerts.json`, dan Closed-Loop Mitigation Dispatcher).
+    - Menampilkan alur *closed-loop feedback* (garis putus-putus merah) yang mengembalikan perintah blokir `iptables` dan sinkronisasi blacklist ke seluruh node target.
+
+---
+
+### 🔹 Sesi 21: Penyederhanaan Diagram Arsitektur (Multi-Tenant Monitored Node) & Pembaruan Naskah Bab 3
+- **User:** Meminta diagram dibuat lebih simpel dan manusiawi ("tidak terlalu ramai") tanpa label microservice kaku (Node 1 Auth, Node 2 Catalog, Node 3 Order, database terpisah), karena secara realitas dunia nyata (seperti klien VPS PT Dwansoft), 1 server VPS dapat menjalankan banyak website dan database secara simultan.
+- **Hasil:**
+  - **Penyederhanaan Visual Diagram (Gambar 3.2):** Menyatukan representasi target menjadi entitas generik: *Server Target / Monitored VPS (PEP) - Simpul Terpantau (Monitored Node 1...N)* yang menaungi Web Server & Aplikasi Bisnis multi-tenant, Agen Telemetri Golang pasif (<15MB RAM), dan Firewall Kernel Linux (`iptables DROP`).
+  - **Kerapian & Keterbacaan Visual:** Format 4 kolom bersih, tipografi besar & tegas, padding lega, eliminasi bullet points mikro yang berdesakan, alir data HTTP/S $\rightarrow$ Agent Forwarder $\rightarrow$ Center SIEM Engine $\rightarrow$ Web SOC/alerts.json, dan koridor umpan balik tertutup *Closed-Loop Dynamic Containment* di bagian bawah.
+  - **Sinkronisasi Berkas Grafis:** Diperbarui pada `gambar/diagram_arsitektur_manusiawi.svg`, `gambar/diagram_arsitektur_manusiawi.png`, `gambar/diagram_arsitektur_simple.svg`, dan `gambar/diagram_arsitektur_simple.png` (resolusi 2x retina 2120x1232 px).
+  - **Penyelarasan Naskah Akademik Bab 3:** Memperbarui narasi Subbab 3.3.1 (Poin 2 PEP Multi-Tenant Server) dan Subbab 3.4.1 (Skenario Uji Serangan) pada berkas Word `4332201024_Sultan Arif Syaidinah_Update.docx` dan re-ekspor resmi ke `4332201024_Sultan Arif Syaidinah_Update.pdf`.
+
+---
+
+### 🔹 Sesi 22: Redesain Total Diagram Arsitektur (Authentic Draw.io / Anti-AI Clutter) & Sinkronisasi Proposal
+- **User:** Meminta diagram dibuat lebih simple dan manusiawi agar tidak terlihat seperti buatan AI (/boost).
+- **Hasil:**
+  - **Eliminasi Total AI Tropes:** Menghapus seluruh bullet list di dalam kartu komponen (lebih dari 30 bullet) dan bottom pill/badge bars di dalam kotak. Menyesuaikan dengan standar diagram arsitektur akademik D4 RKS / IEEE / draw.io (diagram komponen & aliran, bukan slide presentasi).
+  - **Struktur Simetris 2 - 4 - 4 - 2:**
+    - Kolom 1 (Sumber Akses / Jaringan Luar): `Attacker / Penyerang` (Sub: `Brute Force / Port Scan`) dan `Pengguna Sah` (Sub: `Trafik Web Normal`).
+    - Kolom 2 (Server Target PEP): `Web Server & Aplikasi`, `Berkas Log Akses`, `Agen Telemetri` (<15MB RAM), `Firewall Lokal (PEP)` (iptables Kernel DROP).
+    - Kolom 3 (Center SIEM PDP): `Ingestion API Gateway`, `In-Memory Correlation Engine`, `Sigma Rule Engine`, `Mitigation Controller`.
+    - Kolom 4 (Monitoring & Forensik): `Web SOC Dashboard` (SSE Stream) dan `Berkas Forensik` (alerts.json NDJSON).
+    - Koridor Bawah Closed-Loop Feedback: Panah putus-putus merah elegan dari `Mitigation Controller` ke `Firewall Lokal (PEP)` dengan label `Perintah Blokir IP (iptables DROP)`.
+  - **Pembaruan Berkas Grafis & Dokumen:**
+    - Regenerasi SVG & PNG resolusi tinggi (2080x920 px, 2x retina crispness): `gambar/diagram_arsitektur_manusiawi.svg`, `gambar/diagram_arsitektur_simple.svg`, `gambar/diagram_arsitektur_manusiawi.png`, dan `gambar/diagram_arsitektur_simple.png`.
+### 🔹 Sesi 23: Audit Komprehensif & Penyempurnaan Spacing Diagram Arsitektur Human-Crafted
+- **User:** Memastikan diagram arsitektur Gambar 3.2 benar-benar manusiawi, terbaca sempurna di proposal, tanpa overlap teks/garis, dan memenuhi seluruh spesifikasi konektor.
+- **Hasil:**
+  - **Identifikasi Cacat Desain Versi Awal:**
+    - Hilangnya label protokol `HTTP / HTTPS (Port 80/443)` pada konektor lalu lintas masuk.
+    - Ukuran font micro-text (7.5px) yang tidak terbaca pada dokumen cetak A4.
+    - Tabrakan visual (*boundary collision*) di mana badge konektor (`Stream Log NDJSON`, `Siaran Alert`, `Append Log`) memotong garis batas putus-putus antar-kontainer akibat jarak antar-kolom yang terlalu sempit (36px).
+  - **Penyempurnaan Arsitektur Visual (1140 x 480 px):**
+    - Memperluas jarak antar-kontainer (85px s.d. 105px) sehingga seluruh label konektor berada tepat di ruang bebas tanpa menyentuh batas kontainer.
+    - Menambahkan badge protokol eksplisit `HTTP / HTTPS (Port 80/443)` pada zona bebas di antara Kolom 1 dan Kolom 2 tanpa memotong garis aliran data.
+    - Menyempurnakan rute panah: aliran `Trafik Serangan` lurus horizontal, aliran `Trafik Normal` berbelok rapi, rumus ambang batas `Ambang ∑ f(e) ≥ θ` ditempatkan elegan di samping panah Sigma.
+    - Memperbarui dimensi EMU Word (`cx=5040000`, `cy=2122000`) agar rasio aspek gambar tetap proporsional 1:1 tanpa distorsi.
+  - **Sinkronisasi & Verifikasi:**
+    - Regenerasi `gambar/diagram_arsitektur_simple.svg`, `gambar/diagram_arsitektur_manusiawi.svg`, `gambar/diagram_arsitektur_simple.png`, dan `gambar/diagram_arsitektur_manusiawi.png` (2280x960 px, 2x retina crispness).
+    - Kompilasi ulang PDF resmi `4332201024_Sultan Arif Syaidinah_Update.pdf` (46 halaman) dan verifikasi visual pada Halaman 36.
+
+---
+
+### 🔹 Sesi 24: Eksplorasi VPS Produksi, Debugging Agent Telemetri (gopsutil & Discord Webhook), Nginx Reverse Proxy, Systemd Daemon, & Cloudflare Tunnel
+- **User:** Meminta pengecekan 2 server NAT VPS baru (`prod-1` & `prod-2`), evaluasi kode `TA-REAL` (`gopsutil` & Discord Webhook), konsultasi looping vs cron job, penanganan CPU 100% dari `unattended-upgrades`, konfigurasi Nginx Reverse Proxy dari awal, perbaikan service systemd crash loop (`mkdir uploads permission denied`), integrasi Cloudflare Tunnel, serta pencatatan seluruh langkah ke file markdown.
+- **Hasil:**
+  - **Audit Server & Jaringan NAT:** Mengonfirmasi `prod-1` (port 33070) dan `prod-2` (port 33072) di IP bersama `202.155.143.178`, subnet `192.168.33.0/24`, Ubuntu 24.04 LTS, 1 vCPU, 2GB RAM.
+  - **Debugging TA-REAL (Golang):**
+    - Mengidentifikasi silent exit pada `main.go` karena return `CollectMetrics()` tidak ditampung.
+    - Menemukan 2 bug kritis webhook Discord: `footer` berbentuk array slice `[]Footer` (ditolak HTTP 400 oleh Discord) dan silent error `return err` di mana `err == nil`.
+    - Mengedukasi pola pengiriman berkala: *In-Code Ticker (`time.NewTicker`) + Graceful Shutdown (`os/signal`)* jauh lebih unggul dan akurat dibanding *cron job*.
+  - **Penanganan CPU 100%:** Mengidentifikasi proses `unattended-upgrade` bawaan Ubuntu (PID 1914) yang menyedot CPU hingga 85%, memberikan perintah safe stop (`kill -15`), pemulihan `dpkg --configure -a`, dan mematikan auto-timer.
+  - **Setup Nginx & Systemd Service:**
+    - Menyusun vhost Reverse Proxy (`/etc/nginx/sites-available/web1`) dengan `proxy_pass http://127.0.0.1:8088`, websocket support, dan header `CF-Connecting-IP`.
+    - Mendiagnosis service `web1.service` crash-loop: error `mkdir uploads: permission denied` akibat kepemilikan folder `root`, diselesaikan dengan `sudo chown -R ubuntu:ubuntu /var/www/web1`. Status berhasil `active (running)` dan merespons `HTTP/1.1 200 OK`.
+  - **Integrasi Cloudflare Tunnel & Nginx Logging:**
+    - Memverifikasi bahwa data riwayat koneksi `/ip` (*Visitor Passport*) berhasil mencatat IP asli pengunjung dunia nyata (`103.144.38.93`) ke database `visitors.db`.
+    - Memberikan solusi pengalihan Cloudflare Tunnel dari bypass `localhost:8088` ke `localhost:80` (Nginx) agar log `/var/log/nginx/access.log` aktif tercatat untuk konsumsi sensor SIEM.
+  - **Dokumentasi Terstruktur:** Menyusun berkas panduan lengkap di [`catatan/07_panduan_setup_nginx_reverse_proxy_dan_systemd.md`](./catatan/07_panduan_setup_nginx_reverse_proxy_dan_systemd.md) dan memperbarui [`catatan/README.md`](./catatan/README.md).
+
+---
+
 ## 📁 3. Daftar File Penting Proyek
 
 | File / Direktori | Deskripsi |
 | :--- | :--- |
 | **`GEMINI.md`** | File ini (Catatan riwayat percakapan, keputusan teknis, dan konteks proyek). |
-| **`catatan/`** | **Pusat Dokumentasi TA:** Berisi catatan riset Zero Trust (`01_`), literatur jurnal (`02_`), implementasi (`03_`), subfolder `diagram/`, dan subfolder `proposal/`. |
+| **`catatan/07_panduan_setup_nginx_reverse_proxy_dan_systemd.md`** | **Panduan Web & Service:** Rangkuman langkah demi langkah setup Nginx Reverse Proxy, Systemd service daemon, Cloudflare Tunnel, perbaikan izin folder, dan pemantauan log koneksi untuk telemetri SIEM. |
+| **`gambar/`** | **Koleksi Diagram Bab 3:** Memuat `diagram_arsitektur_simple.png` (versi bersih & ringkas siap pakai di Word), `diagram_arsitektur_dan_alur_siem.png` (versi detail komprehensif), berkas SVG vektornya, serta draf `Agent 1.png`. |
+| **`.agents/skills/`** | Koleksi 4 skill kustom pendukung TA: `polibatam-academic-writer`, `docx-report-generator`, `academic-citation-manager`, dan `cyber-benchmark-analyzer`. |
+| **`catatan/`** | **Pusat Dokumentasi TA:** Berisi catatan riset Zero Trust (`01_`), literatur jurnal (`02_`), implementasi (`03_`), matriks bab 2 (`04_`), landasan teori lengkap (`05_`), catatan sesi multi-node & dashboard (`06_`), panduan Nginx & Systemd (`07_`), subfolder `diagram/`, dan `proposal/`. |
+| **`CenterServer/`** | Implementasi server pusat SIEM (Fiber v3, SSE broadcast hub, in-memory IP tracker, ingestion endpoint, dan embedded frontend Wazuh). |
+| **`client/agent/`** | Background telemetry agent Go (`gopsutil` CPU, RAM, disk, OS info, periodic ticker). |
+| **`client/server-1/` s.d. `server-3/`** | Target microservices (Auth, Catalog, Order) penghasil access log nyata ke shared volume. |
+| **`docker-compose.yml`** | Orkestrasi 7 container simulasi multi-node cluster. |
 | **`data/`** | Berisi dataset Example IPs (`data/ips/`) dan Example Logs (`data/logs/`) untuk pengujian SIEM. |
 | **`data/README.md`** | Panduan katalog dan cara pakai dataset IP dan log pada sistem. |
 | **`artikel/`** | Berisi file PDF artikel jurnal ilmiah, full-text markdown, dan katalog referensi Bab 2. |
 | **`RealKABIL/`** | Aplikasi web target (Laravel / PHP 8.3 FPM) sebagai sumber penghasil data log nyata untuk diuji oleh SIEM. |
 | **`rule.yaml`** | Definisi aturan deteksi ancaman standar Sigma (Brute force, privilege escalation, proxy access). |
 | **`services/ipapi.go`** | Modul integrasi GeoIP & Threat Intelligence dengan in-memory caching. |
-| **`server1/` & `server2/`** | Implementasi target microservice (Auth Server & Resource Server). |
+
+---
+
+## 🛡️ 4. Pedoman Wajib: Mode Panduan & Mitra Kritis Independen
+
+Aturan operasional tetap yang **WAJIB** dipatuhi oleh asisten AI untuk seluruh interaksi berikutnya di repositori ini:
+
+### 1. Permission-First Execution (Dilarang Edit File Tanpa Izin)
+- AI **DILARANG KERAS** menggunakan tool `edit_file` atau `write_file` untuk mengubah kode aplikasi, Dockerfile, maupun script proyek tanpa instruksi eksplisit atau izin tertulis dari pengguna (misal: *"tolong editkan"*, *"pasang sekarang"*, *"buatkan kodenya ke file X"*).
+- Peran AI adalah **Navigator & Pemandu**: sajikan analisis arsitektur, tunjukkan lokasi berkas/baris kode, dan tampilkan contoh kode/diff di chat agar pengguna yang mengimplementasikan dan memegang kendali penuh.
+
+### 2. Intelektual Independen & Debat Konstruktif (Bantah Jika Keliru)
+- AI **DILARANG** menjadi *yes-man* atau sekadar membeo dan menyetujui pemikiran pengguna jika pemikiran tersebut keliru.
+- Jika ada kelemahan teknis, risiko keamanan, masalah skalabilitas, anti-pattern, atau celah performa pada ide, logika, atau pilihan kode pengguna:
+  - **Lawan, tantang, dan debat secara lugas, objektif, dan profesional.**
+  - Jelaskan secara konkret letak kesalahan dan risiko yang akan dihadapi sistem.
+  - Sajikan alternatif solusi berbasis standar industri yang lebih efisien dan aman.
+
+### 3. Pemeriksaan Diagnostik Tetap Aktif (Read-Only)
+- Tool inspeksi read-only (`read_file`, `grep`, `docker ps`, pemeriksaan log, atau test runner) tetap dijalankan secara proaktif agar argumen, panduan, dan kritik yang disampaikan AI selalu berlandaskan fakta kondisi nyata sistem.
+
