@@ -50,17 +50,36 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'vps-password', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh '''
                         cd Agent
-
-                        # 1. Pastikan folder tujuan ada & kirim file ke Prod-1
-                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 "mkdir -p /home/ubuntu/project"
+                                                # 1. Deploy ke Prod-1
+                        # Step A: Stop service agar lock binary lepas
+                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
+                            "echo '$PASS' | sudo -S systemctl stop agent"
+                        
+                        # Step B: Copy binary baru & beri izin eksekusi
                         sshpass -p "$PASS" scp -F /dev/null -P 25187 -o StrictHostKeyChecking=no \
                             AgentServerOnline $USER@163.52.135.168:/home/ubuntu/project/
-                        sshpass -p "$PASS" ssh -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 "chmod +x /home/ubuntu/project/AgentServerOnline"
-                        # 2. Pastikan folder tujuan ada & kirim file ke Prod-2
-                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 "mkdir -p /home/ubuntu/project"
+                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
+                            "chmod +x /home/ubuntu/project/AgentServerOnline"
+
+                        # Step C: Start service kembali
+                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
+                            "echo '$PASS' | sudo -S systemctl start agent"
+
+
+                        # 2. Deploy ke Prod-2
+                        # Step A: Stop service
+                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
+                            "echo '$PASS' | sudo -S systemctl stop agent"
+
+                        # Step B: Copy binary baru & beri izin eksekusi
                         sshpass -p "$PASS" scp -F /dev/null -P 27151 -o StrictHostKeyChecking=no \
                             AgentServerOnline $USER@163.52.135.170:/home/ubuntu/project/
-                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 "chmod +x /home/ubuntu/project/AgentServerOnline"
+                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
+                            "chmod +x /home/ubuntu/project/AgentServerOnline"
+
+                        # Step C: Start service kembali
+                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
+                            "echo '$PASS' | sudo -S systemctl start agent"
                     '''
                 }
             }
