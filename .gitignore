@@ -10,7 +10,6 @@
 *.dylib
 *-linux
 *-app
-GEMINI.md
 .agents
 .vscode
 
@@ -35,6 +34,8 @@ cratch
 gambar
 learn
 Report
+config
+logs
 
 # IDE & OS Artifacts
 .vscode/
@@ -43,3 +44,6 @@ Thumbs.db
 .DS_Store
 
 
+docker-compose.yml
+Dockerfile
+GEMINI.md

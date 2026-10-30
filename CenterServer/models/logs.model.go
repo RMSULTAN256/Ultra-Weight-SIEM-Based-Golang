@@ -3,12 +3,12 @@ package models
 import "time"
 
 type SecurityLog struct {
-	Timestamp time.Time `json:"timestamp"`
-	Hostname  string    `json:"hostname"`
-	EventType string    `json:"event_type"`
-	RuleID    string    `json:"rule_id,omitempty"`
-	RuleDesc  string    `json:"rule_desc,omitempty"`
-	MitreID   string    `json:"mitre_id,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
+	Hostname   string    `json:"hostname"`
+	EventType  string    `json:"event_type"`
+	RuleID     string    `json:"rule_id,omitempty"`
+	RuleDesc   string    `json:"rule_desc,omitempty"`
+	MitreID    string    `json:"mitre_id,omitempty"`
 	Severity   int       `json:"severity"`
 	SourceIP   string    `json:"source_ip,omitempty"`
 	Message    string    `json:"message,omitempty"`

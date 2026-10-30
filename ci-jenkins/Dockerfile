@@ -2,12 +2,13 @@ FROM jenkins/jenkins:lts-jdk17
 
 USER root
 
-# Install Docker CLI, Git, curl, make
+# Install Docker CLI, Git, curl, make, sshpass
 RUN apt-get update && apt-get install -y \
     curl \
     git \
     make \
     docker.io \
+    sshpass \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Golang (Official release)
