@@ -49,15 +49,16 @@ pipeline {
                echo '===> Mengirim binary ke server prod-1 dan prod-2...'
                 withCredentials([usernamePassword(credentialsId: 'vps-password', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh '''
+                        cd Agent && 
                         # 1. Pastikan folder tujuan ada & kirim file ke Prod-1
                         sshpass -p "$PASS" ssh -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 "mkdir -p /home/ubuntu/project"
                         sshpass -p "$PASS" scp -P 25187 -o StrictHostKeyChecking=no \
-                            Agent/AgentServerOnline $USER@163.52.135.168:/home/ubuntu/project/
+                            AgentServerOnline $USER@163.52.135.168:/home/ubuntu/project/
                         sshpass -p "$PASS" ssh -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 "chmod +x /home/ubuntu/project/AgentServerOnline"
                         # 2. Pastikan folder tujuan ada & kirim file ke Prod-2
                         sshpass -p "$PASS" ssh -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 "mkdir -p /home/ubuntu/project"
                         sshpass -p "$PASS" scp -P 27151 -o StrictHostKeyChecking=no \
-                            Agent/AgentServerOnline $USER@163.52.135.170:/home/ubuntu/project/
+                            AgentServerOnline $USER@163.52.135.170:/home/ubuntu/project/
                         sshpass -p "$PASS" ssh -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 "chmod +x /home/ubuntu/project/AgentServerOnline"
                     '''
                 }
