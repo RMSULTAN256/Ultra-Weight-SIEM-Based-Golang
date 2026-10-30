@@ -53,7 +53,7 @@ pipeline {
                                                 # 1. Deploy ke Prod-1
                         # Step A: Stop service agar lock binary lepas
                         sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
-                            "echo '$PASS' | sudo -S systemctl stop agent"
+                            "echo '$PASS' | sudo -S systemctl stop agentGowaz"
                         
                         # Step B: Copy binary baru & beri izin eksekusi
                         sshpass -p "$PASS" scp -F /dev/null -P 25187 -o StrictHostKeyChecking=no \
@@ -69,7 +69,7 @@ pipeline {
                         # 2. Deploy ke Prod-2
                         # Step A: Stop service
                         sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
-                            "echo '$PASS' | sudo -S systemctl stop agent"
+                            "echo '$PASS' | sudo -S systemctl stop agentGo"
 
                         # Step B: Copy binary baru & beri izin eksekusi
                         sshpass -p "$PASS" scp -F /dev/null -P 27151 -o StrictHostKeyChecking=no \
