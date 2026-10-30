@@ -51,38 +51,35 @@ pipeline {
                     sh '''
                         cd Agent
                                                 # 1. Deploy ke Prod-1
-                        # Step A: Stop service agar lock binary lepas
+                        # Step A: Stop service & pastikan folder config ada
                         sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
-                            "echo '$PASS' | sudo -S systemctl stop agentGowaz"
+                            "mkdir -p /home/ubuntu/project/config && echo '$PASS' | sudo -S systemctl stop agentGowaz"
                         
-                        # Step B: Copy binary baru & beri izin eksekusi
+                        # Step B: Copy binary & file konfigurasi
                         sshpass -p "$PASS" scp -F /dev/null -P 25187 -o StrictHostKeyChecking=no \
                             AgentServerOnline $USER@163.52.135.168:/home/ubuntu/project/
+                        sshpass -p "$PASS" scp -F /dev/null -P 25187 -o StrictHostKeyChecking=no \
+                            config/log_collector.json $USER@163.52.135.168:/home/ubuntu/project/config/
                         sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
                             "chmod +x /home/ubuntu/project/AgentServerOnline"
-
-                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 ... "mkdir -p /home/ubuntu/project/config"
-                        sshpass -p "$PASS" scp -F /dev/null -P 25187 config/log_collector.json $USER@163.52.135.168:/home/ubuntu/project/config/
 
                         # Step C: Start service kembali
                         sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
                             "echo '$PASS' | sudo -S systemctl start agentGowaz"
-
-
                         # 2. Deploy ke Prod-2
-                        # Step A: Stop service
-                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
-                            "echo '$PASS' | sudo -S systemctl stop agentGo"
 
-                        # Step B: Copy binary baru & beri izin eksekusi
+                        # Step A: Stop service & pastikan folder config ada
+                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
+                            "mkdir -p /home/ubuntu/project/config && echo '$PASS' | sudo -S systemctl stop agentGo"
+
+                        # Step B: Copy binary & file konfigurasi
                         sshpass -p "$PASS" scp -F /dev/null -P 27151 -o StrictHostKeyChecking=no \
                             AgentServerOnline $USER@163.52.135.170:/home/ubuntu/project/
+                        sshpass -p "$PASS" scp -F /dev/null -P 27151 -o StrictHostKeyChecking=no \
+                            config/log_collector.json $USER@163.52.135.170:/home/ubuntu/project/config/
                         sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
                             "chmod +x /home/ubuntu/project/AgentServerOnline"
-
-                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 ... "mkdir -p /home/ubuntu/project/config"
-                        sshpass -p "$PASS" scp -F /dev/null -P 27151 config/log_collector.json $USER@163.52.135.170:/home/ubuntu/project/config/
-
+                            
                         # Step C: Start service kembali
                         sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
                             "echo '$PASS' | sudo -S systemctl start agentGo"
