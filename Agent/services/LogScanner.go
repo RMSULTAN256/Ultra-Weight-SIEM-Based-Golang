@@ -4,7 +4,6 @@ import (
 	"agent/models"
 	"bufio"
 	"bytes"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -16,9 +15,10 @@ import (
 )
 
 type LogCollector struct {
-	ServerUrl string
-	AgentName string
-	Client    *http.Client
+	ServerUrl   string
+	AgentName   string
+	Client      *http.Client
+	fileOffsets map[string]int64
 }
 
 func NewLogCollector(serverUrl, agentName string) *LogCollector {
@@ -28,6 +28,7 @@ func NewLogCollector(serverUrl, agentName string) *LogCollector {
 		Client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
+		fileOffsets: make(map[string]int64),
 	}
 }
 
@@ -50,17 +51,46 @@ func (ls *LogCollector) processFile(file string, target models.TargetConfig) {
 
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f) //ignore
-	for scanner.Scan() {
-		line := scanner.Text()
+	stat, err := f.Stat()
+	if err != nil {
+		return
+	}
 
-		for _, keyword := range target.Keywords {
-			if strings.Contains(strings.ToLower(line), strings.ToLower(keyword)) {
-				ls.handleThreatFound(line, keyword, target.AppName)
-				break
+	offset := ls.fileOffsets[file]
+	if stat.Size() < offset {
+		offset = 0
+	}
+
+	if stat.Size() == offset {
+		return
+	}
+
+	if _, err := f.Seek(offset, 0); err != nil {
+		return
+	}
+
+	reader := bufio.NewReader(f)
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			offset += int64(len(line))
+			lineClean := strings.TrimRight(line, "\r\n")
+			if len(target.Keywords) == 0 {
+				ls.handleThreatFound(lineClean, "raw_log", target.AppName)
+			} else {
+				for _, keyword := range target.Keywords {
+					if strings.Contains(strings.ToLower(lineClean), strings.ToLower(keyword)) {
+						ls.handleThreatFound(lineClean, keyword, target.AppName)
+						break
+					}
+				}
 			}
 		}
+		if err != nil {
+			break // Mencapai akhir file (EOF)
+		}
 	}
+	ls.fileOffsets[file] = offset
 }
 
 func (ls *LogCollector) handleThreatFound(rawLine, keyword, appName string) {
@@ -76,10 +106,10 @@ func (ls *LogCollector) handleThreatFound(rawLine, keyword, appName string) {
 	secLog := models.SecurityLog{
 		Timestamp: time.Now(),
 		Hostname:  ls.AgentName,
-		EventType: "threat_detected",
-		Severity:  8,
+		EventType: "event_log",
+		Severity:  1,
 		SourceIP:  extractedIP,
-		Message:   fmt.Sprintf("[%s] Terdeteksi '%s' pada: %s", appName, keyword, rawLine),
+		Message:   rawLine,
 		Service:   appName,
 	}
 
