@@ -1,7 +1,7 @@
 package config
 
 import (
-	"agent/models"
+	"Agent/models"
 	"fmt"
 	"os"
 

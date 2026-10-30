@@ -1,7 +1,7 @@
 package services
 
 import (
-	"agent/models"
+	"Agent/models"
 	"bytes"
 	"fmt"
 	"net/http"

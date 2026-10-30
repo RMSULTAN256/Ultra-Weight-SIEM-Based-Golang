@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"Agent/models"
 	"bytes"
 	"fmt"
 	"net/http"
@@ -8,7 +9,7 @@ import (
 	"github.com/bytedance/sonic"
 )
 
-func SendHeartbeat(client *http.Client, url string, status *DeviceStatus) error {
+func SendHeartbeat(client *http.Client, url string, status *models.DeviceStatus) error {
 	jsonData, err := sonic.Marshal(status)
 	if err != nil {
 		return err

@@ -1,4 +1,4 @@
-module agent
+module Agent
 
 go 1.26.5
 

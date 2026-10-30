@@ -1,8 +1,8 @@
 package main
 
 import (
-	"agent/config"
-	"agent/services"
+	"Agent/config"
+	"Agent/services"
 	"fmt"
 	"os"
 	"time"
