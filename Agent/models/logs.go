@@ -3,7 +3,7 @@ package models
 import "time"
 
 type LogConfig struct {
-	ScanIntervalSec int            `json:"scan_interval_sec"`
+	ScanIntervalSec int            `json:"scan_interval"`
 	Targets         []TargetConfig `json:"targets"`
 }
 

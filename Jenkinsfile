@@ -61,6 +61,9 @@ pipeline {
                         sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
                             "chmod +x /home/ubuntu/project/AgentServerOnline"
 
+                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 ... "mkdir -p /home/ubuntu/project/config"
+                        sshpass -p "$PASS" scp -F /dev/null -P 25187 config/log_collector.json $USER@163.52.135.168:/home/ubuntu/project/config/
+
                         # Step C: Start service kembali
                         sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
                             "echo '$PASS' | sudo -S systemctl start agentGowaz"
@@ -76,6 +79,9 @@ pipeline {
                             AgentServerOnline $USER@163.52.135.170:/home/ubuntu/project/
                         sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
                             "chmod +x /home/ubuntu/project/AgentServerOnline"
+
+                        sshpass -p "$PASS" ssh -F /dev/null -p 27151 ... "mkdir -p /home/ubuntu/project/config"
+                        sshpass -p "$PASS" scp -F /dev/null -P 27151 config/log_collector.json $USER@163.52.135.170:/home/ubuntu/project/config/
 
                         # Step C: Start service kembali
                         sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
