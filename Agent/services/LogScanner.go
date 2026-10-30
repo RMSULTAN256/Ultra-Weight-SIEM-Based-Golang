@@ -103,13 +103,30 @@ func (ls *LogCollector) handleThreatFound(rawLine, keyword, appName string) {
 		}
 	}
 
+	severity := 1
+	evenType := "event_log"
+
+	switch strings.ToLower(keyword) {
+	case "unioun select, eval(":
+		evenType = "web_attack"
+		severity = 10
+	case "failed password", "invalid user":
+		evenType = "auth_failure"
+		severity = 6
+	case "403":
+		severity = 4
+	case "404":
+		severity = 2
+	}
+
 	secLog := models.SecurityLog{
 		Timestamp: time.Now(),
 		Hostname:  ls.AgentName,
 		EventType: "event_log",
-		Severity:  1,
+		Severity:  severity,
 		SourceIP:  extractedIP,
 		Message:   rawLine,
+		Status:    keyword,
 		Service:   appName,
 	}
 

@@ -304,6 +304,13 @@ func (s *SIEMService) ToggleBlockIP(ip string) (*models.IPTrafficRecord, bool) {
 		return nil, false
 	}
 
+	if isWhiteListedIP(ip) {
+		// rec.Status = "Whitelisted"
+		// copyRec := *rec
+		// return &copyRec, false
+		return nil, false
+	}
+
 	if rec.Status == "Blocked (iptables)" {
 		rec.Status = "Monitored"
 	} else {
@@ -336,4 +343,13 @@ func (s *SIEMService) Broadcast(data string) {
 		default:
 		}
 	}
+}
+
+func isWhiteListedIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+
+	return ip.IsLoopback() || ip.IsPrivate()
 }
