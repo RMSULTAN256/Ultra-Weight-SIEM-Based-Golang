@@ -63,14 +63,17 @@ pipeline {
                 }
             }
         }
+    }
 
-        post {
-            success {
-                echo ' Pipeline CI/CD Berhasil! Kode siap di-deploy.'
-            }
-            failure {
-                echo ' Pipeline Gagal! Cek log di atas.'
-            }
+    post {
+        success {
+            echo "Build & deploy berhasil"
+        }
+        failure {
+            echo "Pipeline gagal, coba di cek kembali"
+        }
+        always {
+            echo "Pembersihan workspace selesai"
         }
     }
 }
