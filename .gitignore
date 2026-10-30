@@ -16,7 +16,6 @@
 # Runtime Data & Logs (Kecuali dataset mentah di data/logs/)
 *.ndjson
 *.log
-/app/logs/
 CenterServer/heartbeat.ndjson
 CenterServer/events.ndjson
 
@@ -47,3 +46,4 @@ Thumbs.db
 docker-compose.yml
 Dockerfile
 GEMINI.md
+ci-jenkins
