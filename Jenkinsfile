@@ -63,7 +63,7 @@ pipeline {
 
                         # Step C: Start service kembali
                         sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
-                            "echo '$PASS' | sudo -S systemctl start agent"
+                            "echo '$PASS' | sudo -S systemctl start agentGowaz"
 
 
                         # 2. Deploy ke Prod-2
@@ -79,7 +79,7 @@ pipeline {
 
                         # Step C: Start service kembali
                         sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
-                            "echo '$PASS' | sudo -S systemctl start agent"
+                            "echo '$PASS' | sudo -S systemctl start agentGo"
                     '''
                 }
             }
