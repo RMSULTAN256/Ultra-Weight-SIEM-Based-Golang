@@ -304,12 +304,12 @@ func (s *SIEMService) ToggleBlockIP(ip string) (*models.IPTrafficRecord, bool) {
 		return nil, false
 	}
 
-	if isWhiteListedIP(ip) {
-		// rec.Status = "Whitelisted"
-		// copyRec := *rec
-		// return &copyRec, false
-		return nil, false
-	}
+	// if isWhiteListedIP(ip) {
+	// 	// rec.Status = "Whitelisted"
+	// 	// copyRec := *rec
+	// 	// return &copyRec, false
+	// 	return nil, false
+	// }
 
 	if rec.Status == "Blocked (iptables)" {
 		rec.Status = "Monitored"
