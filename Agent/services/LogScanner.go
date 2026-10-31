@@ -122,7 +122,7 @@ func (ls *LogCollector) handleThreatFound(rawLine, keyword, appName string) {
 	secLog := models.SecurityLog{
 		Timestamp: time.Now(),
 		Hostname:  ls.AgentName,
-		EventType: "event_log",
+		EventType: evenType,
 		Severity:  severity,
 		SourceIP:  extractedIP,
 		Message:   rawLine,
