@@ -275,7 +275,7 @@ function connectSSE() {
 
 function handleIncomingEvent(data) {
   // 0. Agent Deletion Broadcast Event
-  if (data.event_type === "AGENT_DELETE" && data.agent_id) {
+  if ((data.event_type === "AGENT_DELETE" || data.event_type === "AGENT_DELETED") && data.agent_id) {
     const targetId = data.agent_id;
     state.activeAgents.delete(targetId);
     for (const [k, v] of state.activeAgents.entries()) {

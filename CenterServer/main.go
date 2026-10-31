@@ -19,7 +19,12 @@ import (
 var frontendFS embed.FS
 
 func main() {
-	app := fiber.New()
+	app := fiber.New(
+		fiber.Config{
+			TrustProxy:  true,
+			ProxyHeader: fiber.HeaderXForwardedFor,
+		},
+	)
 	// 1. Inisialisasi Database SQLite & AuthHandler
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
@@ -59,10 +64,9 @@ func main() {
 	app.Post("/api/v1/agent/logs", h.HandleIncomingLog)
 	app.Get("/api/v1/ips", h.HandleGetIPs)
 	app.Get("/api/v1/logs", h.HandleGetLogs)
-	app.Get("/api/v1/agents", h.HandleGetAgents)
 	app.Post("/api/v1/containment/block", h.HandleBlockIP)
 	app.Get("/api/v1/agents", h.HandleGetAgents)
-	app.Post("/api/v1/agents/:id", h.HandleDeleteAgent)
+	app.Delete("/api/v1/agents/:id", h.HandleDeleteAgent)
 
 	port := os.Getenv("PORT")
 	if port == "" {
