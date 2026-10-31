@@ -56,7 +56,14 @@ func (ls *LogCollector) processFile(file string, target models.TargetConfig) {
 		return
 	}
 
-	offset := ls.fileOffsets[file]
+	offset, exists := ls.fileOffsets[file]
+
+	if !exists {
+		offset = stat.Size()
+		ls.fileOffsets[file] = offset
+		return
+	}
+
 	if stat.Size() < offset {
 		offset = 0
 	}
