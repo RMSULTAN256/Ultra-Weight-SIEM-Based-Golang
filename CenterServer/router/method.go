@@ -177,6 +177,7 @@ func (sc *HandleService) HandleIncomingLog(c fiber.Ctx) error {
 }
 
 func (sc *HandleService) HandleGetLogs(c fiber.Ctx) error {
+	c.Set("X-total-Ingested", strconv.FormatUint(sc.siemService.GetTotalLogsCount(), 10))
 	limitStr := c.Query("limit")
 	limit := 1000
 	if limitStr != "" {
@@ -199,6 +200,19 @@ func (sc *HandleService) HandleGetLogs(c fiber.Ctx) error {
 	}
 
 	return c.JSON(sc.siemService.GetLogs(limit))
+}
+
+func (sc *HandleService) HandleDeleteAgent(c fiber.Ctx) error {
+	agentID := c.Params("id")
+	if agentID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"Error": "Agent ID Required"})
+	}
+	if sc.siemService.DeleteAgent(agentID) {
+		if msgBytes, err := sonic.Marshal(fiber.Map{"event_type": "AGENT_DELETED", "agent_id": agentID}); err == nil {
+			sc.siemService.Broadcast(string(msgBytes))
+		}
+	}
+	return c.JSON(fiber.Map{"status": "success", "message": "Agent deleted"})
 }
 
 func (sc *HandleService) HandleGetAgents(c fiber.Ctx) error {

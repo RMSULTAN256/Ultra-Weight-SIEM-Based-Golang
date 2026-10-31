@@ -184,7 +184,14 @@ async function loadInitialLogs() {
       const logs = await res.json();
       if (Array.isArray(logs)) {
         state.eventsList = logs.map(normalizeLogItem);
-        state.totalEventsReceived = state.eventsList.length;
+        
+        // Baca akumulasi total event dari header backend jika ada
+        const totalHeader = res.headers.get("X-Total-Ingested");
+        if (totalHeader) {
+          state.totalEventsReceived = parseInt(totalHeader, 10);
+        } else {
+          state.totalEventsReceived = state.eventsList.length;
+        }
 
         // Count high alerts
         state.highAlertsCount = state.eventsList.filter(e => e.level >= 7).length;
@@ -267,6 +274,20 @@ function connectSSE() {
 }
 
 function handleIncomingEvent(data) {
+  // 0. Agent Deletion Broadcast Event
+  if (data.event_type === "AGENT_DELETE" && data.agent_id) {
+    const targetId = data.agent_id;
+    state.activeAgents.delete(targetId);
+    for (const [k, v] of state.activeAgents.entries()) {
+      if (k === targetId || v.data.agent_id === targetId || v.data.hostname === targetId) {
+        state.activeAgents.delete(k);
+      }
+    }
+    renderFleetCards();
+    refreshAgentFleetCounts();
+    return;
+  }
+
   // 1. IP Update Event
   if (data.event_type === "IP_UPDATE" && data.data) {
     updateOrAddIPRecord(data.data, true);
@@ -1044,7 +1065,10 @@ function renderFleetCards() {
               IP: ${d.source_ip || '127.0.0.1'} | ${d.platform || 'Linux'}
             </div>
           </div>
-          <span class="agent-tag" style="${isOnline ? '' : 'background:rgba(239,68,68,0.15);color:#fca5a5;border-color:rgba(239,68,68,0.3);'}">${isOnline ? 'ACTIVE' : 'OFFLINE'}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="agent-tag" style="${isOnline ? '' : 'background:rgba(239,68,68,0.15);color:#fca5a5;border-color:rgba(239,68,68,0.3);'}">${isOnline ? 'ACTIVE' : 'OFFLINE'}</span>
+            <button class="btn-remove-node" onclick="removeFleetAgent('${d.agent_id || d.hostname}')" title="Hapus node ini dari monitoring">&times;</button>
+          </div>
         </div>
 
         <div class="meter-group">
@@ -1099,6 +1123,34 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// Hapus node agent dari dashboard dan backend
+async function removeFleetAgent(agentId) {
+  if (!confirm(`Hapus node "${agentId}" dari monitoring fleet?`)) {
+    return;
+  }
+
+  // Hapus langsung dari state memori frontend
+  state.activeAgents.delete(agentId);
+  for (const [k, v] of state.activeAgents.entries()) {
+    if (k === agentId || v.data.agent_id === agentId || v.data.hostname === agentId) {
+      state.activeAgents.delete(k);
+    }
+  }
+  renderFleetCards();
+  refreshAgentFleetCounts();
+
+  try {
+    const res = await fetch(`/api/v1/agents/${encodeURIComponent(agentId)}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      console.warn("Server response not ok for agent deletion:", res.status);
+    }
+  } catch (err) {
+    console.error("Gagal mengirim request delete agent:", err);
+  }
 }
 
 // ==========================================================================

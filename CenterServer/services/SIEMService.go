@@ -27,6 +27,8 @@ type SIEMService struct {
 
 	logsMu sync.RWMutex
 	logs   []models.SecurityLog
+
+	totalLogsCount uint64
 }
 
 func NewSIEMService() *SIEMService {
@@ -156,6 +158,12 @@ func (s *SIEMService) RecordAgent(status *models.DeviceStatus) {
 	if copyStatus.AgentID == "" {
 		copyStatus.AgentID = key
 	}
+
+	for oldKey, existing := range s.agents {
+		if oldKey != key && existing.Hostname == status.Hostname && existing.SourceIP == status.SourceIP {
+			delete(s.agents, oldKey)
+		}
+	}
 	s.agents[key] = &copyStatus
 }
 
@@ -171,9 +179,24 @@ func (s *SIEMService) GetAgents() []*models.DeviceStatus {
 	return list
 }
 
+func (s *SIEMService) DeleteAgent(agentID string) bool {
+	s.agentMu.Lock()
+	defer s.agentMu.Unlock()
+
+	for k, v := range s.agents {
+		if k == agentID || v.AgentID == agentID || v.Hostname == agentID {
+			delete(s.agents, k)
+			return true
+		}
+	}
+	return false
+}
+
 func (s *SIEMService) AddLog(log models.SecurityLog) {
 	s.logsMu.Lock()
 	defer s.logsMu.Unlock()
+
+	s.totalLogsCount++
 
 	if len(s.logs) >= MaxLogsInMemory {
 		// Zero-allocation ring buffer: shift left and overwrite oldest
@@ -207,6 +230,13 @@ func (s *SIEMService) GetLogs(limit int) []models.SecurityLog {
 		res[i] = s.logs[n-1-i]
 	}
 	return res
+}
+
+func (s *SIEMService) GetTotalLogsCount() uint64 {
+	s.logsMu.RLock()
+	defer s.logsMu.RUnlock()
+
+	return s.totalLogsCount
 }
 
 func (s *SIEMService) GetLogsPaged(page, pageSize int) ([]models.SecurityLog, int) {

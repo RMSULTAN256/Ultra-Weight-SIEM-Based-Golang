@@ -61,6 +61,8 @@ func main() {
 	app.Get("/api/v1/logs", h.HandleGetLogs)
 	app.Get("/api/v1/agents", h.HandleGetAgents)
 	app.Post("/api/v1/containment/block", h.HandleBlockIP)
+	app.Get("/api/v1/agents", h.HandleGetAgents)
+	app.Post("/api/v1/agents/:id", h.HandleDeleteAgent)
 
 	port := os.Getenv("PORT")
 	if port == "" {
