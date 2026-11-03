@@ -39,10 +39,13 @@ const state = {
     pendingNewCount: 0
   },
 
-  // Overview Recent Events Pagination
+  // Overview Recent Events Pagination & Filtering
   overviewPagination: {
     currentPage: 1,
-    pageSize: 10
+    pageSize: 25,
+    searchQuery: '',
+    filterType: 'ALL',
+    isLivePaused: false
   },
 
   // Inbound IP Traffic Pagination & Filtering
@@ -55,11 +58,11 @@ const state = {
 
 // View Titles Mapping
 const viewTitles = {
-  'view-overview': 'Security Operations Overview',
-  'view-fleet': 'Cluster Fleet Node Telemetry',
-  'view-ip-traffic': 'Inbound Request IP Tracker',
-  'view-events': 'Security Events & Discover Stream',
-  'view-containment': 'Zero-Trust Dynamic Containment Engine'
+  'view-overview': 'Overview',
+  'view-fleet': 'Agents Fleet',
+  'view-ip-traffic': 'Inbound IP Traffic',
+  'view-events': 'Security Events',
+  'view-containment': 'Zero-Trust Containment'
 };
 
 // ==========================================================================
@@ -106,6 +109,12 @@ const copyJsonBtn = document.getElementById('copyJsonBtn');
 closeModalBtn.addEventListener('click', () => jsonModal.classList.add('hidden'));
 jsonModal.addEventListener('click', (e) => {
   if (e.target === jsonModal) jsonModal.classList.add('hidden');
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && jsonModal && !jsonModal.classList.contains('hidden')) {
+    jsonModal.classList.add('hidden');
+  }
 });
 
 if (copyJsonBtn) {
@@ -159,6 +168,33 @@ function normalizeLogItem(item) {
     else mitre = "T1082 Telemetry";
   }
 
+  // Parse HTTP Method & Status Code dari data atau dari baris teks Nginx
+  let statusCode = item.status_code || null;
+  let httpMethod = item.method || null;
+
+  if (item.message) {
+    // Cocokkan pola Nginx: "METHOD /path HTTP/1.x" 200
+    const httpMatch = item.message.match(/"([A-Z]{3,7})\s+[^"]+\s+HTTP\/[0-9.]+"\s+(\d{3})/i);
+    if (httpMatch) {
+      if (!httpMethod) httpMethod = httpMatch[1].toUpperCase();
+      if (!statusCode) statusCode = parseInt(httpMatch[2], 10);
+    }
+  }
+
+  let statusBadgeHtml = '<span class="status-badge status-none">-</span>';
+  if (statusCode) {
+    let cls = 'status-2xx';
+    if (statusCode >= 500) cls = 'status-5xx';
+    else if (statusCode >= 400) cls = 'status-4xx';
+    else if (statusCode >= 300) cls = 'status-3xx';
+
+    const methodHtml = httpMethod ? `<span class="method-tag method-${httpMethod.toLowerCase()}">${httpMethod}</span>` : '';
+    statusBadgeHtml = `<div class="status-badge-wrapper">${methodHtml}<span class="status-badge ${cls}">${statusCode}</span></div>`;
+  } else if (item.status && item.status !== "raw_log" && item.status !== "event_log") {
+    // Hanya tampilkan jika statusnya bukan keyword internal agen ("raw_log")
+    statusBadgeHtml = `<span class="status-badge status-other" title="${escapeHtml(item.status)}">${escapeHtml(item.status)}</span>`;
+  }
+
   return {
     id: ++logIdSeq,
     timestamp: item.timestamp || new Date().toISOString(),
@@ -166,6 +202,8 @@ function normalizeLogItem(item) {
     agent: item.hostname || "target-node",
     level: severity,
     level_label: levelLabel,
+    status_code: statusCode,
+    status_badge: statusBadgeHtml,
     desc: desc,
     mitre: mitre,
     raw: item
@@ -285,6 +323,30 @@ function handleIncomingEvent(data) {
     }
     renderFleetCards();
     refreshAgentFleetCounts();
+    renderOverviewFleetSummary();
+    return;
+  }
+
+  // 0.1 Engine Real-time Memory Stats Event
+  if (data.event_type === "ENGINE_STATS") {
+    const allocMB = data.ram_alloc_mb || 0;
+    const sysMB = data.ram_sys_mb || 0;
+    const goroutines = data.goroutines || 0;
+
+    const ramStatEl = document.getElementById('ramStat');
+    if (ramStatEl) {
+      ramStatEl.textContent = `${allocMB.toFixed(1)} MB / 80 MB RSS`;
+    }
+
+    const engineResEl = document.getElementById('engineResourceVal');
+    if (engineResEl) {
+      engineResEl.textContent = `${allocMB.toFixed(1)} MB`;
+    }
+
+    const engineCapEl = document.getElementById('engineResourceCap');
+    if (engineCapEl) {
+      engineCapEl.textContent = `Sys: ${sysMB.toFixed(1)} MB • ${goroutines} gr`;
+    }
     return;
   }
 
@@ -321,7 +383,7 @@ function handleIncomingEvent(data) {
     updateKPIStats();
 
     // Update Overview Recent Events table respecting pause and page
-    if (!state.eventsPagination.isLivePaused && state.overviewPagination.currentPage === 1) {
+    if (!state.overviewPagination.isLivePaused && state.overviewPagination.currentPage === 1) {
       renderOverviewRecentEvents();
     } else {
       updateOverviewPaginationOnly();
@@ -419,7 +481,7 @@ function renderEventsTable() {
 
   // 1. Render Table Rows
   if (pageItems.length === 0) {
-    tbody.innerHTML = `<tr class="placeholder-row"><td colspan="7">${total === 0 ? 'No security events match the criteria.' : 'No events in buffer.'}</td></tr>`;
+    tbody.innerHTML = `<tr class="placeholder-row"><td colspan="8">${total === 0 ? 'No security events match the criteria.' : 'No events in buffer.'}</td></tr>`;
   } else {
     tbody.innerHTML = pageItems.map(item => {
       const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '-';
@@ -433,6 +495,7 @@ function renderEventsTable() {
           <td class="ip-cell">${item.source_ip}</td>
           <td class="node-cell">${item.agent}</td>
           <td><span class="badge-level ${levelClass}">${item.level_label}</span></td>
+          <td>${item.status_badge}</td>
           <td class="desc-cell" title="${escapeHtml(item.desc)}">${escapeHtml(item.desc)}</td>
           <td><span class="mitre-badge">${item.mitre}</span></td>
           <td><button class="btn-action" onclick="inspectEventById(${item.id})">Inspect</button></td>
@@ -634,14 +697,56 @@ if (eventsPageSizeSelect) {
   });
 }
 
-// Overview Recent Events with Full Pagination
+// ==========================================================================
+// OVERVIEW OBSERVABILITY CONSOLE (HIGH DENSITY STREAM)
+// ==========================================================================
+const overviewExpandedRowIds = new Set();
+
+window.toggleOverviewRow = function(id) {
+  if (overviewExpandedRowIds.has(id)) {
+    overviewExpandedRowIds.delete(id);
+  } else {
+    overviewExpandedRowIds.add(id);
+  }
+  renderOverviewRecentEvents();
+};
+
+function getFilteredOverviewEvents() {
+  let list = state.eventsList;
+
+  // Filter Type Chip
+  const fType = state.overviewPagination.filterType;
+  if (fType === 'NGINX') {
+    list = list.filter(e => (e.raw && e.raw.service === 'Nginx Web') || (e.desc && e.desc.includes('HTTP/')) || e.status_code);
+  } else if (fType === 'SSH') {
+    list = list.filter(e => (e.raw && e.raw.service === 'SSH Auth') || (e.desc && (e.desc.includes('sshd') || e.desc.includes('Invalid user') || e.desc.includes('Failed password'))));
+  } else if (fType === 'ERRORS') {
+    list = list.filter(e => e.status_code >= 400);
+  } else if (fType === 'THREATS') {
+    list = list.filter(e => e.level >= 7);
+  }
+
+  // Search Query
+  const q = state.overviewPagination.searchQuery.toLowerCase().trim();
+  if (q) {
+    list = list.filter(e => {
+      const targetStr = `${e.source_ip} ${e.agent} ${e.desc} ${e.mitre} ${e.status_code || ''} ${e.raw?.service || ''} ${e.raw?.method || ''}`.toLowerCase();
+      return targetStr.includes(q);
+    });
+  }
+
+  return list;
+}
+
+// Overview Recent Events with Full Pagination & Row Expansion
 function renderOverviewRecentEvents() {
   const tbody = document.getElementById('overviewRecentEventsBody');
   const infoEl = document.getElementById('overviewPaginationInfo');
   const controlsEl = document.getElementById('overviewPaginationControls');
   if (!tbody) return;
 
-  const total = state.eventsList.length;
+  const filtered = getFilteredOverviewEvents();
+  const total = filtered.length;
   const pageSize = state.overviewPagination.pageSize;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -652,29 +757,61 @@ function renderOverviewRecentEvents() {
 
   const startIdx = total === 0 ? 0 : (currentPage - 1) * pageSize;
   const endIdx = Math.min(startIdx + pageSize, total);
-  const pageItems = state.eventsList.slice(startIdx, endIdx);
+  const pageItems = filtered.slice(startIdx, endIdx);
 
   if (pageItems.length === 0) {
-    tbody.innerHTML = `<tr class="placeholder-row"><td colspan="7">Awaiting live event stream...</td></tr>`;
+    tbody.innerHTML = `<tr class="placeholder-row"><td colspan="9">${total === 0 ? 'No events match the active filter criteria.' : 'Awaiting live event stream...'}</td></tr>`;
   } else {
-    tbody.innerHTML = pageItems.map(item => {
+    let rowsHtml = '';
+    pageItems.forEach(item => {
+      const isExpanded = overviewExpandedRowIds.has(item.id);
       const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '-';
       let levelClass = 'badge-level-info';
       if (item.level >= 12) levelClass = 'badge-level-danger';
       else if (item.level >= 7) levelClass = 'badge-level-warn';
 
-      return `
-        <tr>
+      rowsHtml += `
+        <tr class="log-row ${isExpanded ? 'expanded' : ''}" onclick="toggleOverviewRow(${item.id})">
+          <td>
+            <button class="expand-btn ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleOverviewRow(${item.id})" title="Toggle inline details">&#9656;</button>
+          </td>
           <td class="time-cell">${timeStr}</td>
           <td class="ip-cell">${item.source_ip}</td>
           <td class="node-cell">${item.agent}</td>
           <td><span class="badge-level ${levelClass}">${item.level_label}</span></td>
+          <td>${item.status_badge}</td>
           <td class="desc-cell" title="${escapeHtml(item.desc)}">${escapeHtml(item.desc)}</td>
           <td><span class="mitre-badge">${item.mitre}</span></td>
-          <td><button class="btn-action" onclick="inspectEventById(${item.id})">Inspect</button></td>
+          <td><button class="btn-action" onclick="event.stopPropagation(); inspectEventById(${item.id})">Inspect</button></td>
         </tr>
       `;
-    }).join('');
+
+      if (isExpanded) {
+        rowsHtml += `
+          <tr class="log-detail-row">
+            <td colspan="9">
+              <div class="log-detail-content">
+                <div class="log-detail-grid">
+                  <div><span class="detail-k">Timestamp:</span> <span class="detail-v">${item.timestamp}</span></div>
+                  <div><span class="detail-k">Source IP:</span> <span class="detail-v">${item.source_ip}</span></div>
+                  <div><span class="detail-k">Node / Agent:</span> <span class="detail-v">${item.agent}</span></div>
+                  <div><span class="detail-k">Service:</span> <span class="detail-v">${escapeHtml(item.raw?.service || item.raw?.program || '-')}</span></div>
+                  <div><span class="detail-k">Event Type:</span> <span class="detail-v">${escapeHtml(item.raw?.event_type || 'event_log')}</span></div>
+                  <div><span class="detail-k">HTTP Code:</span> <span class="detail-v">${item.status_code || '-'}</span></div>
+                  <div><span class="detail-k">MITRE Attack:</span> <span class="detail-v">${item.mitre}</span></div>
+                  <div><span class="detail-k">Severity:</span> <span class="detail-v">Level ${item.level}</span></div>
+                </div>
+                <div class="log-detail-raw">
+                  <span class="detail-k">Raw Message Payload:</span>
+                  <pre>${escapeHtml(item.raw?.message || item.desc)}</pre>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+    });
+    tbody.innerHTML = rowsHtml;
   }
 
   // Update Overview Pagination Info
@@ -682,7 +819,9 @@ function renderOverviewRecentEvents() {
     if (total === 0) {
       infoEl.textContent = 'Showing 0 of 0 events';
     } else {
-      infoEl.innerHTML = `Showing <strong>${startIdx + 1}&ndash;${endIdx}</strong> of <strong>${total.toLocaleString()}</strong> events`;
+      const isFiltered = total !== state.eventsList.length;
+      infoEl.innerHTML = `Showing <strong>${startIdx + 1}&ndash;${endIdx}</strong> of <strong>${total.toLocaleString()}</strong> events` +
+        (isFiltered ? ` <span style="color:#64748b;">(filtered from ${state.eventsList.length.toLocaleString()})</span>` : ``);
     }
   }
 
@@ -695,7 +834,8 @@ function renderOverviewRecentEvents() {
 function updateOverviewPaginationOnly() {
   const infoEl = document.getElementById('overviewPaginationInfo');
   const controlsEl = document.getElementById('overviewPaginationControls');
-  const total = state.eventsList.length;
+  const filtered = getFilteredOverviewEvents();
+  const total = filtered.length;
   const pageSize = state.overviewPagination.pageSize;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = state.overviewPagination.currentPage;
@@ -715,7 +855,8 @@ function updateOverviewPaginationOnly() {
 }
 
 window.setOverviewPage = function(page) {
-  const total = state.eventsList.length;
+  const filtered = getFilteredOverviewEvents();
+  const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / state.overviewPagination.pageSize));
   if (page < 1) page = 1;
   if (page > totalPages) page = totalPages;
@@ -727,9 +868,80 @@ window.setOverviewPage = function(page) {
 const overviewPageSizeSelect = document.getElementById('overviewPageSize');
 if (overviewPageSizeSelect) {
   overviewPageSizeSelect.addEventListener('change', (e) => {
-    state.overviewPagination.pageSize = parseInt(e.target.value, 10) || 10;
+    state.overviewPagination.pageSize = parseInt(e.target.value, 10) || 25;
     state.overviewPagination.currentPage = 1;
     renderOverviewRecentEvents();
+  });
+}
+
+// Overview Quick Filter Chips
+document.querySelectorAll('.filter-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.overviewPagination.filterType = btn.dataset.filter || 'ALL';
+    state.overviewPagination.currentPage = 1;
+    renderOverviewRecentEvents();
+  });
+});
+
+// Overview Search Input with debounce
+const overviewLogFilter = document.getElementById('overviewLogFilter');
+const overviewClearFilterBtn = document.getElementById('overviewClearFilterBtn');
+let overviewSearchDebounce = null;
+
+if (overviewLogFilter) {
+  overviewLogFilter.addEventListener('input', (e) => {
+    const val = e.target.value;
+    if (overviewClearFilterBtn) {
+      if (val) overviewClearFilterBtn.classList.remove('hidden');
+      else overviewClearFilterBtn.classList.add('hidden');
+    }
+    clearTimeout(overviewSearchDebounce);
+    overviewSearchDebounce = setTimeout(() => {
+      state.overviewPagination.searchQuery = val;
+      state.overviewPagination.currentPage = 1;
+      renderOverviewRecentEvents();
+    }, 150);
+  });
+}
+
+if (overviewClearFilterBtn) {
+  overviewClearFilterBtn.addEventListener('click', () => {
+    overviewLogFilter.value = '';
+    overviewClearFilterBtn.classList.add('hidden');
+    state.overviewPagination.searchQuery = '';
+    state.overviewPagination.currentPage = 1;
+    renderOverviewRecentEvents();
+  });
+}
+
+// Overview Live Stream Toggle
+const btnOverviewToggleLive = document.getElementById('btnOverviewToggleLive');
+if (btnOverviewToggleLive) {
+  btnOverviewToggleLive.addEventListener('click', () => {
+    state.overviewPagination.isLivePaused = !state.overviewPagination.isLivePaused;
+    const isPaused = state.overviewPagination.isLivePaused;
+    if (isPaused) {
+      btnOverviewToggleLive.classList.remove('active');
+      const textEl = document.getElementById('overviewLiveBtnText');
+      if (textEl) textEl.textContent = 'Stream Paused';
+    } else {
+      btnOverviewToggleLive.classList.add('active');
+      const textEl = document.getElementById('overviewLiveBtnText');
+      if (textEl) textEl.textContent = 'Live Stream';
+      renderOverviewRecentEvents();
+    }
+  });
+}
+
+// Overview Refresh Button
+const btnOverviewRefresh = document.getElementById('btnOverviewRefresh');
+if (btnOverviewRefresh) {
+  btnOverviewRefresh.addEventListener('click', async () => {
+    btnOverviewRefresh.disabled = true;
+    await loadInitialLogs();
+    btnOverviewRefresh.disabled = false;
   });
 }
 
@@ -802,9 +1014,9 @@ function renderIPTable() {
     if (allIPs.length > 0) {
       overviewIpSummary.innerHTML = allIPs.slice(0, 5).map(r => `
         <div class="mini-row">
-          <div>
+          <div class="mini-row-left">
             <span class="mini-ip-addr">${r.ip}</span>
-            <small style="color: #64748b; margin-left: 8px;">(${r.hostname || 'node'})</small>
+            <span class="mini-platform">(${r.hostname || 'node'})</span>
           </div>
           <div>
             <span class="mini-req-count">${(r.request_count || 1).toLocaleString()} reqs</span>
@@ -812,7 +1024,7 @@ function renderIPTable() {
         </div>
       `).join('');
     } else {
-      overviewIpSummary.innerHTML = `<div class="empty-state">No incoming IP requests recorded yet.</div>`;
+      overviewIpSummary.innerHTML = `<div class="empty-state-mini">No incoming IP requests recorded yet.</div>`;
     }
   }
 
@@ -822,9 +1034,9 @@ function renderIPTable() {
     if (blockedIps.length > 0) {
       containmentList.innerHTML = blockedIps.map(r => `
         <div class="containment-item">
-          <div>
-            <strong style="color: #ef4444; font-family: var(--font-mono); font-size: 13px;">${r.ip}</strong>
-            <span style="color: #64748b; font-size: 11px; margin-left: 10px; font-family: var(--font-mono);">Rule: iptables -I INPUT -s ${r.ip} -j DROP</span>
+          <div class="containment-meta">
+            <strong class="containment-ip">${r.ip}</strong>
+            <span class="containment-rule">Rule: iptables -I INPUT -s ${r.ip} -j DROP</span>
           </div>
           <button class="btn-action" onclick="toggleBlockIP('${r.ip}')">Unblock</button>
         </div>
@@ -973,7 +1185,7 @@ function refreshAgentFleetCounts() {
     } else if (onlineCount === totalCount) {
       fleetSubtextEl.textContent = onlineCount > 1 ? `Active Nodes (${totalCount} Total)` : `Active Node (${totalCount} Total)`;
     } else {
-      fleetSubtextEl.innerHTML = `/ ${totalCount} Active (<span style="color:#ef4444;">${totalCount - onlineCount} offline</span>)`;
+      fleetSubtextEl.innerHTML = `/ ${totalCount} Active (<span style="color:var(--color-danger);">${totalCount - onlineCount} offline</span>)`;
     }
   }
 
@@ -981,22 +1193,56 @@ function refreshAgentFleetCounts() {
   if (tagsEl) {
     if (totalCount === 0) {
       tagsEl.textContent = "Waiting for node heartbeats...";
+    } else if (onlineCount === totalCount) {
+      tagsEl.innerHTML = `<span style="color:var(--color-success);">&bull; All ${totalCount} nodes reporting</span>`;
     } else {
-      tagsEl.innerHTML = Array.from(state.activeAgents.values())
-        .map(item => {
-          const isOnline = (now - item.lastSeen) < 20000;
-          const color = isOnline ? "#38bdf8" : "#94a3b8";
-          const dot = isOnline ? "🟢" : "⚪";
-          const ipLabel = item.data.source_ip && !item.data.source_ip.startsWith('127.') ? ` (${item.data.source_ip})` : '';
-          return `<span style="color:${color};font-family:var(--font-mono);margin-right:8px;">${dot} ${item.data.hostname}${ipLabel}</span>`;
-        })
-        .join(' ');
+      tagsEl.innerHTML = `<span style="color:var(--color-danger);">&bull; ${onlineCount}/${totalCount} nodes online (${totalCount - onlineCount} offline)</span>`;
     }
+    // Tooltip showing active hostnames
+    const hostList = Array.from(state.activeAgents.values()).map(i => i.data.hostname).join(', ');
+    tagsEl.title = `Cluster Nodes: ${hostList}`;
   }
 }
 
+function renderOverviewFleetSummary() {
+  const overviewFleetSummary = document.getElementById('overviewFleetSummary');
+  if (!overviewFleetSummary) return;
+
+  if (state.activeAgents.size === 0) {
+    overviewFleetSummary.innerHTML = `<div class="empty-state-mini">No agent heartbeats recorded yet.</div>`;
+    return;
+  }
+
+  const now = Date.now();
+  overviewFleetSummary.innerHTML = Array.from(state.activeAgents.values()).map(item => {
+    const isOnline = (now - item.lastSeen) < 20000;
+    const ipLabel = item.data.source_ip && !item.data.source_ip.startsWith('127.') ? ` [${item.data.source_ip}]` : '';
+    return `
+      <div class="mini-row ${isOnline ? '' : 'is-offline'}">
+        <div class="mini-row-left">
+          <span class="status-pill ${isOnline ? 'online' : 'offline'}">
+            <span class="status-dot"></span>
+            ${isOnline ? 'Online' : 'Offline'}
+          </span>
+          <strong class="mini-host">${item.data.hostname}${ipLabel}</strong>
+          <span class="mini-platform">${item.data.platform || 'Linux'}</span>
+        </div>
+        <div class="mini-row-metrics">
+          <span>CPU: <strong class="metric-accent">${(item.data.cpu_usage || 0).toFixed(1)}%</strong></span>
+          <span class="metric-divider">|</span>
+          <span>RAM: <strong class="metric-accent-green">${(item.data.ram_used_pct || 0).toFixed(1)}%</strong></span>
+          ${item.data.agent_mem_mb ? `<span class="metric-divider">|</span><span>Agent: <strong class="metric-accent-green">${item.data.agent_mem_mb.toFixed(1)}M</strong></span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 // Periodic check to mark inactive agents as offline without needing page reload
-setInterval(refreshAgentFleetCounts, 5000);
+setInterval(() => {
+  refreshAgentFleetCounts();
+  renderOverviewFleetSummary();
+}, 5000);
 
 function updateAgentFleet(d, shouldRender = true) {
   const agentKey = d.agent_id || (d.hostname ? `${d.hostname}-${d.source_ip || 'local'}` : "unknown");
@@ -1006,29 +1252,7 @@ function updateAgentFleet(d, shouldRender = true) {
   });
 
   refreshAgentFleetCounts();
-
-  // Overview Mini Fleet Summary
-  const overviewFleetSummary = document.getElementById('overviewFleetSummary');
-  if (overviewFleetSummary) {
-    const now = Date.now();
-    overviewFleetSummary.innerHTML = Array.from(state.activeAgents.values()).map(item => {
-      const isOnline = (now - item.lastSeen) < 20000;
-      const ipLabel = item.data.source_ip && !item.data.source_ip.startsWith('127.') ? ` [${item.data.source_ip}]` : '';
-      return `
-      <div class="mini-row" style="${isOnline ? '' : 'opacity: 0.6;'}">
-        <div>
-          <strong style="color: #fff; font-family: var(--font-mono);">${item.data.hostname}${ipLabel}</strong>
-          <span style="color: #64748b; font-size: 11px; margin-left: 8px;">${item.data.platform || 'Linux'}</span>
-          ${isOnline ? '<span class="badge-level level-low" style="margin-left:6px;font-size:9px;">ONLINE</span>' : '<span class="badge-level level-critical" style="margin-left:6px;font-size:9px;">OFFLINE</span>'}
-        </div>
-        <div style="font-family: var(--font-mono); font-size: 11px;">
-          CPU: <strong style="color: #38bdf8;">${(item.data.cpu_usage || 0).toFixed(1)}%</strong> | 
-          RAM: <strong style="color: #10b981;">${(item.data.ram_used_pct || 0).toFixed(1)}%</strong>
-        </div>
-      </div>
-    `;
-    }).join('');
-  }
+  renderOverviewFleetSummary();
 
   if (shouldRender) renderFleetCards();
 }
@@ -1061,12 +1285,15 @@ function renderFleetCards() {
         <div class="agent-title-row">
           <div>
             <div class="agent-name">${d.hostname}</div>
-            <div style="font-size: 10px; color: #64748b; font-family: var(--font-mono); margin-top: 2px;">
-              IP: ${d.source_ip || '127.0.0.1'} | ${d.platform || 'Linux'}
+            <div class="agent-sub-meta">
+              IP: ${d.source_ip || '127.0.0.1'} &bull; ${d.platform || 'Linux'}${d.agent_mem_mb ? ` &bull; <span style="color:var(--color-success);font-weight:600;">Agent: ${d.agent_mem_mb.toFixed(1)} MB</span>` : ''}
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="agent-tag" style="${isOnline ? '' : 'background:rgba(239,68,68,0.15);color:#fca5a5;border-color:rgba(239,68,68,0.3);'}">${isOnline ? 'ACTIVE' : 'OFFLINE'}</span>
+          <div class="agent-header-actions">
+            <span class="status-pill ${isOnline ? 'online' : 'offline'}">
+              <span class="status-dot"></span>
+              ${isOnline ? 'Active' : 'Offline'}
+            </span>
             <button class="btn-remove-node" onclick="removeFleetAgent('${d.agent_id || d.hostname}')" title="Hapus node ini dari monitoring">&times;</button>
           </div>
         </div>
@@ -1078,17 +1305,17 @@ function renderFleetCards() {
               <span class="meter-val">${cpu.toFixed(1)}%</span>
             </div>
             <div class="meter-bar-bg">
-              <div class="meter-bar-fill ${getMeterColor(cpu)}" style="width: ${Math.min(cpu, 100)}%;"></div>
+              <div class="meter-bar-fill meter-cpu ${getMeterColor(cpu)}" style="width: ${Math.min(cpu, 100)}%;"></div>
             </div>
           </div>
 
           <div class="meter-row">
             <div class="meter-labels">
               <span>RAM Utilization</span>
-              <span class="meter-val">${d.ram_used_mb || 0} / ${d.ram_total_mb || 0} MB (${ramPct.toFixed(1)}%)</span>
+              <span class="meter-val">${d.ram_used_mb || 0} / ${d.ram_total_mb || 0} MB <span class="meter-sub">(${ramPct.toFixed(1)}%)</span></span>
             </div>
             <div class="meter-bar-bg">
-              <div class="meter-bar-fill ${getMeterColor(ramPct)}" style="width: ${Math.min(ramPct, 100)}%;"></div>
+              <div class="meter-bar-fill meter-ram ${getMeterColor(ramPct)}" style="width: ${Math.min(ramPct, 100)}%;"></div>
             </div>
           </div>
 
@@ -1098,14 +1325,15 @@ function renderFleetCards() {
               <span class="meter-val">${disk.toFixed(1)}%</span>
             </div>
             <div class="meter-bar-bg">
-              <div class="meter-bar-fill ${getMeterColor(disk)}" style="width: ${Math.min(disk, 100)}%;"></div>
+              <div class="meter-bar-fill meter-disk ${getMeterColor(disk)}" style="width: ${Math.min(disk, 100)}%;"></div>
             </div>
           </div>
         </div>
 
         <div class="agent-card-footer">
-          <span>Uptime: ${uptimeStr}</span>
-          <span>Last Seen: ${new Date(item.lastSeen).toLocaleTimeString()}</span>
+          <span><span class="footer-meta-key">Uptime:</span> ${uptimeStr}</span>
+          ${d.agent_mem_mb ? `<span><span class="footer-meta-key">Binary RAM:</span> <strong style="color:var(--color-success);font-weight:600;">${d.agent_mem_mb.toFixed(1)} MB</strong></span>` : ''}
+          <span><span class="footer-meta-key">Last Seen:</span> ${new Date(item.lastSeen).toLocaleTimeString()}</span>
         </div>
       </div>
     `;
@@ -1140,6 +1368,7 @@ async function removeFleetAgent(agentId) {
   }
   renderFleetCards();
   refreshAgentFleetCounts();
+  renderOverviewFleetSummary();
 
   try {
     const res = await fetch(`/api/v1/agents/${encodeURIComponent(agentId)}`, {

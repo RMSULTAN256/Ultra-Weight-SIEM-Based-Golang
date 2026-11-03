@@ -6,10 +6,12 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"runtime"
 	"server3/databases"
 	"server3/router"
 	"server3/services"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/static"
@@ -60,6 +62,21 @@ func main() {
 
 	// 5. Daftarkan Routes SIEM Telemetri
 	app.Get("/api/v1/stream", h.HandleStream)
+	go func() {
+		ticker := time.NewTicker(4 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			allocMB := float64(m.Alloc) / 1024.0 / 1024.0
+			sysMB := float64(m.Sys) / 1024.0 / 1024.0
+
+			payload := fmt.Sprintf(`{"event_type":"ENGINE_STATS","ram_alloc_mb":%.1f,"ram_sys_mb":%.1f,"goroutines":%d}`,
+				allocMB, sysMB, runtime.NumGoroutine())
+			siemService.Broadcast(payload)
+		}
+	}()
+
 	app.Post("/api/v1/agent/heartbeat", h.HandleHeartbeat)
 	app.Post("/api/v1/agent/logs", h.HandleIncomingLog)
 	app.Get("/api/v1/ips", h.HandleGetIPs)

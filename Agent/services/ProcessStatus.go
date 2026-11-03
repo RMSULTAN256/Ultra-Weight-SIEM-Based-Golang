@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -83,6 +84,10 @@ func (mc *MetricCollector) CollectMetrics() (*models.DeviceStatus, error) {
 		}
 	}
 
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	agentAllocmb := float64(m.Alloc) / 1024.0 / 1024.0
+
 	return &models.DeviceStatus{
 		AgentID:     agentID,
 		Hostname:    hostname,
@@ -93,6 +98,7 @@ func (mc *MetricCollector) CollectMetrics() (*models.DeviceStatus, error) {
 		RAMUsedMB:   usedRAMMB,
 		RAMUsedPct:  usedPct,
 		DiskUsedPct: diskVal,
+		AgentMemMB:  agentAllocmb,
 	}, nil
 }
 

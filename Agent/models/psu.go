@@ -10,4 +10,5 @@ type DeviceStatus struct {
 	RAMUsedMB   uint64  `json:"ram_used_mb"`
 	RAMUsedPct  float64 `json:"ram_used_pct"`
 	DiskUsedPct float64 `json:"disk_used_pct"`
+	AgentMemMB  float64 `json:"agent_mem_mb"`
 }

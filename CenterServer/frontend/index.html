@@ -13,7 +13,7 @@
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="wazuh-logo">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00a4e4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
       </div>
@@ -113,7 +113,11 @@
     <!-- Top Header Bar -->
     <header class="topbar">
       <div class="topbar-title">
-        <h2 id="currentViewTitle">Security Operations Overview</h2>
+        <div class="topbar-breadcrumb">
+          <span class="crumb-root">MINI-SIEM</span>
+          <span class="crumb-sep">/</span>
+          <strong id="currentViewTitle" class="crumb-active">Overview</strong>
+        </div>
         <span class="topbar-sub">Central Log Collector &amp; Real-Time Threat Mitigation Engine</span>
       </div>
       <div class="topbar-tools">
@@ -130,106 +134,141 @@
 
     <div class="content-scroll">
       <!-- ==================================================== -->
-      <!-- TAB 1: OVERVIEW DASHBOARD                            -->
+      <!-- TAB 1: OVERVIEW OBSERVABILITY DASHBOARD              -->
       <!-- ==================================================== -->
       <section id="view-overview" class="tab-pane active">
-        <!-- KPI Cards -->
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-header">
-              <span>MONITORED AGENTS</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2">
-                <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
-              </svg>
-            </div>
-            <div class="kpi-value"><span id="activeAgentsCount">0</span> <small id="agentFleetSubtext">Active Node</small></div>
-            <div class="kpi-footer" id="agentTagsSummary">Waiting for node heartbeats...</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-header">
-              <span>UNIQUE SENDER IPS</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-              </svg>
-            </div>
-            <div class="kpi-value info-text" id="uniqueIpsCount">0</div>
-            <div class="kpi-footer">Tracked source IP addresses</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-header">
-              <span>TOTAL INGESTED EVENTS</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-            </div>
-            <div class="kpi-value" id="totalEventsCount">0</div>
-            <div class="kpi-footer" id="bufferCapacityOverview">Buffer: 0 / 1,000 in memory</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-header">
-              <span>SUSPICIOUS / ATTACKS</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-            </div>
-            <div class="kpi-value warning-text" id="highAlertsCount">0</div>
-            <div class="kpi-footer">MITRE T1110 / T1595 triggers</div>
+        <div class="section-title-bar flex-between">
+          <div>
+            <h3>Security Operations Overview</h3>
+            <p>Real-time cluster telemetry, event correlation buffer, and threat detection stream</p>
           </div>
         </div>
 
-        <!-- Quick Summary Row: Mini Fleet + Quick IP Senders -->
-        <div class="grid-2col">
-          <!-- Mini Fleet Summary -->
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Active Cluster Fleet</span>
-              <button class="link-btn" onclick="switchTab('view-fleet')">View All Nodes &rarr;</button>
+        <!-- High-Density Telemetry Metrics Strip -->
+        <div class="metrics-strip">
+          <div class="metric-item">
+            <span class="metric-label">MONITORED AGENTS</span>
+            <div class="metric-val-row">
+              <span class="metric-val" id="activeAgentsCount">0</span>
+              <span class="metric-status-sub" id="agentFleetSubtext">Active Nodes</span>
             </div>
-            <div id="overviewFleetSummary" class="mini-fleet-list">
-              <div class="empty-state">No agent heartbeats recorded yet.</div>
+            <div class="metric-foot-text" id="agentTagsSummary">Waiting for heartbeats...</div>
+          </div>
+
+          <div class="metric-item">
+            <span class="metric-label">UNIQUE SENDER IPS</span>
+            <div class="metric-val-row">
+              <span class="metric-val text-info" id="uniqueIpsCount">0</span>
+              <span class="metric-status-sub">Client IPs</span>
+            </div>
+            <div class="metric-foot-text">Tracked source addresses</div>
+          </div>
+
+          <div class="metric-item">
+            <span class="metric-label">TOTAL INGESTED</span>
+            <div class="metric-val-row">
+              <span class="metric-val" id="totalEventsCount">0</span>
+              <span class="metric-status-sub">Events</span>
+            </div>
+            <div class="metric-foot-text" id="bufferCapacityOverview">Buffer: 0 / 1,000 RAM</div>
+          </div>
+
+          <div class="metric-item">
+            <span class="metric-label">THREATS / ALERTS</span>
+            <div class="metric-val-row">
+              <span class="metric-val text-warn" id="highAlertsCount">0</span>
+              <span class="metric-status-sub">Flagged</span>
+            </div>
+            <div class="metric-foot-text">MITRE T1110 / T1595</div>
+          </div>
+
+          <div class="metric-item">
+            <span class="metric-label">ENGINE RESOURCE</span>
+            <div class="metric-val-row">
+              <span class="metric-val text-success" id="engineResourceVal">&lt; 25 MB</span>
+              <span class="metric-status-sub">RAM RSS</span>
+            </div>
+            <div class="metric-foot-text" id="engineResourceCap">&lt; 80MB Target Cap</div>
+          </div>
+        </div>
+
+        <!-- Compact Cluster Fleet & Inbound IP Status Strip -->
+        <div class="overview-substrip">
+          <div class="substrip-box">
+            <div class="substrip-header">
+              <span>ACTIVE CLUSTER NODES</span>
+              <button class="substrip-link" onclick="switchTab('view-fleet')">View Fleet &rarr;</button>
+            </div>
+            <div id="overviewFleetSummary" class="substrip-content">
+              <div class="empty-state-mini">No agent heartbeats recorded yet.</div>
             </div>
           </div>
 
-          <!-- Quick Top Senders List -->
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Recent Inbound IPs</span>
-              <button class="link-btn" onclick="switchTab('view-ip-traffic')">Full IP List &rarr;</button>
+          <div class="substrip-box">
+            <div class="substrip-header">
+              <span>RECENT INBOUND IPS</span>
+              <button class="substrip-link" onclick="switchTab('view-ip-traffic')">Full IP Ledger &rarr;</button>
             </div>
-            <div id="overviewIpSummary" class="mini-ip-list">
-              <div class="empty-state">No incoming IP requests recorded yet.</div>
+            <div id="overviewIpSummary" class="substrip-content">
+              <div class="empty-state-mini">No incoming IP requests recorded yet.</div>
             </div>
           </div>
         </div>
 
-        <!-- Recent Security Events Preview -->
-        <div class="panel-card" style="margin-top: 20px;">
-          <div class="panel-header">
-            <div>
-              <span class="panel-title">Recent Security Events Stream</span>
-              <span class="panel-sub">Showing newest events from the 1,000-event ring buffer</span>
+        <!-- Observability Log Stream Console (The Hero) -->
+        <div class="console-card">
+          <!-- Observability Query & Filter Toolbar -->
+          <div class="console-toolbar">
+            <div class="console-search">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" id="overviewLogFilter" placeholder="Filter stream (e.g. 103.144, status:404, POST, /api, sshd)...">
+              <button id="overviewClearFilterBtn" class="clear-search-btn hidden" title="Clear filter">&times;</button>
             </div>
-            <button class="link-btn" onclick="switchTab('view-events')">Open Discover (Full 1,000 Logs) &rarr;</button>
+
+            <!-- Quick Filter Chips -->
+            <div class="quick-filter-chips">
+              <button class="filter-chip active" data-filter="ALL">All Events</button>
+              <button class="filter-chip" data-filter="NGINX">Web Nginx</button>
+              <button class="filter-chip" data-filter="SSH">SSH Auth</button>
+              <button class="filter-chip chip-warn" data-filter="ERRORS">4xx / 5xx</button>
+              <button class="filter-chip chip-danger" data-filter="THREATS">Threats (Lvl &ge; 7)</button>
+            </div>
+
+            <!-- Right Controls -->
+            <div class="console-controls">
+              <button id="btnOverviewToggleLive" class="btn-live active" title="Toggle live streaming update">
+                <span class="live-dot-pulse"></span>
+                <span id="overviewLiveBtnText">Live Stream</span>
+              </button>
+              <button id="btnOverviewRefresh" class="btn-tool" title="Reload event buffer">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+              </button>
+            </div>
           </div>
+
+          <!-- Log Table with High Density & Expandable Rows -->
           <div class="table-wrapper">
-            <table class="wazuh-table">
+            <table class="wazuh-table console-table">
               <thead>
                 <tr>
-                  <th width="130">TIME</th>
-                  <th width="140">SOURCE IP</th>
-                  <th width="140">NODE / AGENT</th>
-                  <th width="110">LEVEL</th>
+                  <th width="32"></th>
+                  <th width="115">TIME</th>
+                  <th width="135">SOURCE IP</th>
+                  <th width="110">AGENT</th>
+                  <th width="90">LEVEL</th>
+                  <th width="105">HTTP / CODE</th>
                   <th>EVENT DETAILS</th>
-                  <th width="140">MITRE</th>
-                  <th width="85">INSPECT</th>
+                  <th width="130">MITRE</th>
+                  <th width="75">INSPECT</th>
                 </tr>
               </thead>
               <tbody id="overviewRecentEventsBody">
-                <tr class="placeholder-row"><td colspan="7">Loading events from buffer...</td></tr>
+                <tr class="placeholder-row"><td colspan="9">Loading events from buffer...</td></tr>
               </tbody>
             </table>
           </div>
@@ -240,15 +279,14 @@
               Showing 0 to 0 of 0 events
             </div>
             <div class="pagination-controls" id="overviewPaginationControls">
-              <!-- Dynamically injected page buttons -->
             </div>
             <div class="pagination-size">
-              <label for="overviewPageSize">Per page:</label>
+              <label for="overviewPageSize">Rows:</label>
               <select id="overviewPageSize" class="select-page-size">
-                <option value="10" selected>10</option>
-                <option value="25">25</option>
+                <option value="25" selected>25</option>
                 <option value="50">50</option>
                 <option value="100">100</option>
+                <option value="250">250</option>
               </select>
             </div>
           </div>
@@ -438,6 +476,7 @@
                   <th width="140">SOURCE IP</th>
                   <th width="130">AGENT</th>
                   <th width="110">LEVEL</th>
+                  <th width="105">HTTP / CODE</th>
                   <th>EVENT SIGNATURE / DESCRIPTION</th>
                   <th width="150">MITRE TECHNIQUE</th>
                   <th width="85">INSPECT</th>
@@ -445,7 +484,7 @@
               </thead>
               <tbody id="eventsTableBody">
                 <tr class="placeholder-row">
-                  <td colspan="7">Loading security events from buffer...</td>
+                  <td colspan="8">Loading security events from buffer...</td>
                 </tr>
               </tbody>
             </table>
@@ -515,7 +554,7 @@
     <div class="modal-dialog">
       <div class="modal-header">
         <div class="modal-title-row">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a4e4" stroke-width="2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <h3>Raw Event Detail (NDJSON)</h3>
