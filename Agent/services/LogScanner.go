@@ -2,8 +2,10 @@ package services
 
 import (
 	"Agent/models"
+	"Agent/proto"
 	"bufio"
 	"bytes"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -18,6 +20,7 @@ type LogCollector struct {
 	ServerUrl   string
 	AgentName   string
 	Client      *http.Client
+	GRPCClient  *GRPCClient
 	fileOffsets map[string]int64
 }
 
@@ -146,12 +149,26 @@ func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
 		return err
 	}
 
+	if ls.GRPCClient != nil && ls.GRPCClient.logStream != nil {
+		err = ls.GRPCClient.logStream.Send(&proto.LogPacket{
+			AgentName:   ls.AgentName,
+			PayloadJson: jsonData,
+		})
+		if err == nil {
+			return nil
+		}
+	}
+
 	endPoint := ls.ServerUrl + "/api/v1/agent/logs"
 	resp, err := ls.Client.Post(endPoint, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return err
+		return fmt.Errorf("gRPC & HTTP fallback gagal: %w", err)
 	}
 	defer resp.Body.Close()
 
 	return nil
+}
+
+func (ls *LogCollector) SetGRPCClient(client *GRPCClient) {
+	ls.GRPCClient = client
 }

@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"os"
 	"runtime"
 	"server3/databases"
+	"server3/proto"
 	"server3/router"
 	"server3/services"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/static"
@@ -74,6 +78,30 @@ func main() {
 			payload := fmt.Sprintf(`{"event_type":"ENGINE_STATS","ram_alloc_mb":%.1f,"ram_sys_mb":%.1f,"goroutines":%d}`,
 				allocMB, sysMB, runtime.NumGoroutine())
 			siemService.Broadcast(payload)
+		}
+	}()
+
+	go func() {
+		grpcPort := os.Getenv("GRPC_PORT")
+		if grpcPort == "" {
+			grpcPort = ":50051"
+		}
+
+		if !strings.HasPrefix(grpcPort, ":") {
+			grpcPort = ":" + grpcPort
+		}
+
+		lis, err := net.Listen("tcp", grpcPort)
+		if err != nil {
+			log.Fatalf("Failed to listen port gRPC %s: %v", grpcPort, err)
+		}
+
+		grpcServer := grpc.NewServer()
+		grpcHandler := router.NewGRPCServer(siemService)
+		proto.RegisterIngestionServiceServer(grpcServer, grpcHandler)
+		fmt.Printf("gRPC High-Throughput Ingestion Server: tcp://0.0.0.0%s\n", grpcPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("gRPC server crash: %v", err)
 		}
 	}()
 

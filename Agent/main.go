@@ -29,6 +29,14 @@ func main() {
 
 	logScanner := services.NewLogCollector(baseURL, agentClient)
 
+	grpcAddr := "localhost:50051"
+
+	grpcClient, err := services.NewGRPCClient(grpcAddr, agentClient)
+	if err != nil {
+		fmt.Printf("[ERROR] Gagal membuat klien gRPC: %v\n", err)
+	} else {
+		logScanner.SetGRPCClient(grpcClient)
+	}
 	if logCfg != nil {
 		scanInterval := logCfg.ScanIntervalSec
 		if scanInterval <= 0 {
