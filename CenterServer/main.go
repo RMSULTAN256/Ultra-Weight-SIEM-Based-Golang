@@ -51,6 +51,13 @@ func main() {
 	app.Use("/", static.New("", static.Config{
 		FS:         subFS,
 		IndexNames: []string{"index.html"},
+		MaxAge:     0,
+		ModifyResponse: func(c fiber.Ctx) error {
+			c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Set("Pragma", "no-cache")
+			c.Set("Expires", "0")
+			return nil
+		},
 	}))
 
 	// 3. Inisialisasi SIEM Service & Router
