@@ -29,7 +29,10 @@ func main() {
 
 	logScanner := services.NewLogCollector(baseURL, agentClient)
 
-	grpcAddr := "localhost:50051"
+	grpcAddr := os.Getenv("GRPC_SERVER")
+	if grpcAddr == "" {
+		grpcAddr = "gowaz.vulnstack.xyz:443"
+	}
 
 	grpcClient, err := services.NewGRPCClient(grpcAddr, agentClient)
 	if err != nil {

@@ -3,9 +3,12 @@ package services
 import (
 	"Agent/proto"
 	"context"
+	"crypto/tls"
 	"fmt"
+	"strings"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -17,7 +20,15 @@ type GRPCClient struct {
 }
 
 func NewGRPCClient(serverAddr, agentName string) (*GRPCClient, error) {
-	conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var creds credentials.TransportCredentials
+
+	if strings.Contains(serverAddr, ":443") || !strings.Contains(serverAddr, "localhost") {
+		creds = credentials.NewTLS(&tls.Config{})
+	} else {
+		creds = insecure.NewCredentials()
+	}
+
+	conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
