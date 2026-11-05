@@ -42,12 +42,16 @@ func main() {
 	}
 	if logCfg != nil {
 		scanInterval := logCfg.ScanIntervalSec
-		if scanInterval <= 0 {
-			scanInterval = 5
+		interval := 5 * time.Second
+
+		if logCfg.ScanIntervalMs > 0 {
+			interval = time.Duration(logCfg.ScanIntervalMs) * time.Millisecond
+		} else if logCfg.ScanIntervalSec > 0 {
+			interval = time.Duration(logCfg.ScanIntervalSec) * time.Second
 		}
 
 		go func() {
-			logTicker := time.NewTicker(time.Duration(scanInterval) * time.Second)
+			logTicker := time.NewTicker(interval)
 			defer logTicker.Stop()
 			fmt.Printf("[LOG] Active, Monitoring %d target log every %d second", len(logCfg.Targets), scanInterval)
 

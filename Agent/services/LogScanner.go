@@ -6,22 +6,46 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/bytedance/sonic"
 )
 
 type LogCollector struct {
-	ServerUrl   string
-	AgentName   string
-	Client      *http.Client
-	GRPCClient  *GRPCClient
-	fileOffsets map[string]int64
+	ServerUrl, AgentName string
+	Client               *http.Client
+	GRPCClient           *GRPCClient
+	fileOffsets          map[string]int64
+	state                map[string]fileState
+}
+
+type fileState struct {
+	Inode  uint64 `json:"inode"`
+	Offset int64  `json:"offset"`
+}
+
+func inodeOff(fi os.FileInfo) uint64 {
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return st.Ino
+	}
+	return 0
+}
+
+var rules = []struct {
+	kw, typ string
+	sev     int
+}{
+	{"union select", "web_attack", 10},
+	{"eval(", "web_attack", 10},
+	{"failed password", "auth_failure", 6},
+	{"invalid user", "auth_failure", 6},
 }
 
 func NewLogCollector(serverUrl, agentName string) *LogCollector {
@@ -31,7 +55,7 @@ func NewLogCollector(serverUrl, agentName string) *LogCollector {
 		Client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		fileOffsets: make(map[string]int64),
+		state: make(map[string]fileState),
 	}
 }
 
@@ -46,64 +70,51 @@ func (lg *LogCollector) ScanTarget(target models.TargetConfig) {
 	}
 }
 
-func (ls *LogCollector) processFile(file string, target models.TargetConfig) {
-	f, err := os.Open(file)
+func (ls *LogCollector) processFile(path string, target models.TargetConfig) {
+	f, err := os.Open(path)
 	if err != nil {
 		return
 	}
-
 	defer f.Close()
-
-	stat, err := f.Stat()
+	fi, err := f.Stat()
 	if err != nil {
 		return
 	}
-
-	offset, exists := ls.fileOffsets[file]
-
-	if !exists {
-		offset = stat.Size()
-		ls.fileOffsets[file] = offset
+	ino := inodeOff(fi)
+	st, ok := ls.state[path]
+	switch {
+	case !ok:
+		ls.state[path] = fileState{Inode: ino, Offset: fi.Size()}
+		return
+	case st.Inode != ino || fi.Size() < st.Offset:
+		st = fileState{Inode: ino, Offset: 0}
+	}
+	if fi.Size() == st.Offset {
+		ls.state[path] = st
 		return
 	}
-
-	if stat.Size() < offset {
-		offset = 0
-	}
-
-	if stat.Size() == offset {
+	if _, err := f.Seek(st.Offset, io.SeekStart); err != nil {
 		return
 	}
-
-	if _, err := f.Seek(offset, 0); err != nil {
-		return
-	}
-
-	reader := bufio.NewReader(f)
+	r := bufio.NewReaderSize(f, 64*1024)
 	for {
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
-			offset += int64(len(line))
-			lineClean := strings.TrimRight(line, "\r\n")
-			if len(target.Keywords) == 0 {
-				ls.handleThreatFound(lineClean, "raw_log", target.AppName)
-			} else {
-				for _, keyword := range target.Keywords {
-					if strings.Contains(strings.ToLower(lineClean), strings.ToLower(keyword)) {
-						ls.handleThreatFound(lineClean, keyword, target.AppName)
-						break
-					}
-				}
-			}
+		line, err := r.ReadString('\n')
+		if !strings.HasSuffix(line, "\n") {
+			break
 		}
+		clean := strings.TrimRight(line, "\r\n")
+		if sendErr := ls.handleLine(clean, target); sendErr != nil {
+			break
+		}
+		st.Offset += int64(len(line))
 		if err != nil {
-			break // Mencapai akhir file (EOF)
+			break // EOF
 		}
 	}
-	ls.fileOffsets[file] = offset
+	ls.state[path] = st
 }
 
-func (ls *LogCollector) handleThreatFound(rawLine, keyword, appName string) {
+func (ls *LogCollector) handleLine(rawLine string, target models.TargetConfig) error {
 	extractedIP := "127.0.0.1"
 	tokens := strings.Fields(rawLine)
 	for _, t := range tokens {
@@ -112,35 +123,40 @@ func (ls *LogCollector) handleThreatFound(rawLine, keyword, appName string) {
 			break
 		}
 	}
-
 	severity := 1
-	evenType := "event_log"
+	eventType := "event_log"
+	status := "raw_log"
 
-	switch strings.ToLower(keyword) {
-	case "unioun select, eval(":
-		evenType = "web_attack"
-		severity = 10
-	case "failed password", "invalid user":
-		evenType = "auth_failure"
-		severity = 6
-	case "403":
-		severity = 4
-	case "404":
-		severity = 2
+	lower := strings.ToLower(rawLine)
+	for _, r := range rules {
+		if strings.Contains(lower, r.kw) {
+			eventType = r.typ
+			severity = r.sev
+			status = r.kw
+			break
+		}
+	}
+
+	if status == "raw_log" && len(target.Keywords) > 0 {
+		for _, kw := range target.Keywords {
+			if strings.Contains(lower, strings.ToLower(kw)) {
+				status = kw
+				break
+			}
+		}
 	}
 
 	secLog := models.SecurityLog{
 		Timestamp: time.Now(),
 		Hostname:  ls.AgentName,
-		EventType: evenType,
+		EventType: eventType,
 		Severity:  severity,
 		SourceIP:  extractedIP,
 		Message:   rawLine,
-		Status:    keyword,
-		Service:   appName,
+		Status:    status,
+		Service:   target.AppName,
 	}
-
-	ls.sendLogToCenter(secLog)
+	return ls.sendLogToCenter(secLog)
 }
 
 func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
@@ -148,7 +164,6 @@ func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
 	if err != nil {
 		return err
 	}
-
 	if ls.GRPCClient != nil && ls.GRPCClient.logStream != nil {
 		err = ls.GRPCClient.logStream.Send(&proto.LogPacket{
 			AgentName:   ls.AgentName,
@@ -165,10 +180,8 @@ func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
 		return fmt.Errorf("gRPC & HTTP fallback gagal: %w", err)
 	}
 	defer resp.Body.Close()
-
 	return nil
 }
-
 func (ls *LogCollector) SetGRPCClient(client *GRPCClient) {
 	ls.GRPCClient = client
 }

@@ -1,4 +1,5 @@
 {
+    "scan_interval_ms": 500,
     "scan_interval": 5,
     "targets": [
         {
