@@ -48,6 +48,9 @@ const state = {
     isLivePaused: false
   },
 
+  // Latency Probe Results per Agent
+  nodeProbeResults: new Map(),
+
   // Inbound IP Traffic Pagination & Filtering
   ipsPagination: {
     currentPage: 1,
@@ -1280,8 +1283,29 @@ function renderFleetCards() {
       ? `${Math.floor(d.uptime_sec / 3600)}h ${Math.floor((d.uptime_sec % 3600) / 60)}m`
       : '-';
 
+    const agentKey = d.agent_id || d.hostname;
+    const probeData = state.nodeProbeResults.get(agentKey);
+    let probeHtml = `<span class="probe-idle">Latensi HTTP belum diuji</span>`;
+    if (probeData) {
+      if (probeData.is_up) {
+        probeHtml = `
+          <span class="probe-badge success">
+            ● ${probeData.latency_ms.toFixed(1)} ms
+          </span>
+          <span class="probe-code">(HTTP ${probeData.status_code || 200})</span>
+        `;
+      } else {
+        probeHtml = `
+          <span class="probe-badge danger">
+            ● Offline
+          </span>
+          <span class="probe-code">(${escapeHtml(probeData.error_msg || 'Unreachable')})</span>
+        `;
+      }
+    }
+
     return `
-      <div class="fleet-card" id="agent-card-${d.agent_id || d.hostname}">
+      <div class="fleet-card" id="agent-card-${agentKey}">
         <div class="agent-title-row">
           <div>
             <div class="agent-name">${d.hostname}</div>
@@ -1294,7 +1318,7 @@ function renderFleetCards() {
               <span class="status-dot"></span>
               ${isOnline ? 'Active' : 'Offline'}
             </span>
-            <button class="btn-remove-node" onclick="removeFleetAgent('${d.agent_id || d.hostname}')" title="Hapus node ini dari monitoring">&times;</button>
+            <button class="btn-remove-node" onclick="removeFleetAgent('${agentKey}')" title="Hapus node ini dari monitoring">&times;</button>
           </div>
         </div>
 
@@ -1328,6 +1352,18 @@ function renderFleetCards() {
               <div class="meter-bar-fill meter-disk ${getMeterColor(disk)}" style="width: ${Math.min(disk, 100)}%;"></div>
             </div>
           </div>
+        </div>
+
+        <div class="agent-probe-row">
+          <div class="probe-result-box" id="probe-result-${agentKey}">
+            ${probeHtml}
+          </div>
+          <button class="btn-probe-node" id="btn-probe-${agentKey}" onclick="probeAgentNode('${agentKey}', '${d.source_ip || '127.0.0.1'}')" title="Uji latensi pengiriman & koneksi HTTP">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            <span>Test Latency</span>
+          </button>
         </div>
 
         <div class="agent-card-footer">
@@ -1379,6 +1415,44 @@ async function removeFleetAgent(agentId) {
     }
   } catch (err) {
     console.error("Gagal mengirim request delete agent:", err);
+  }
+}
+
+// Uji latensi pengiriman & koneksi HTTP node website via /api/v1/probe
+async function probeAgentNode(agentKey, ip) {
+  const btn = document.getElementById(`btn-probe-${agentKey}`);
+  const resultEl = document.getElementById(`probe-result-${agentKey}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `
+      <svg class="spin-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+      <span>Testing...</span>
+    `;
+  }
+  if (resultEl) {
+    resultEl.innerHTML = `<span class="probe-loading">Probing ${escapeHtml(ip)}...</span>`;
+  }
+
+  const targetUrl = (ip.startsWith('http://') || ip.startsWith('https://')) ? ip : `http://${ip}`;
+
+  try {
+    const res = await fetch('/api/v1/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: targetUrl })
+    });
+    const data = await res.json();
+    state.nodeProbeResults.set(agentKey, data);
+    renderFleetCards();
+  } catch (err) {
+    state.nodeProbeResults.set(agentKey, {
+      is_up: false,
+      error_msg: err.message || 'Request Failed',
+      latency_ms: 0
+    });
+    renderFleetCards();
   }
 }
 

@@ -1846,3 +1846,98 @@ body {
   padding: 20px;
   color: var(--text-dim);
 }
+
+/* ==========================================================================
+   FLEET CARD LATENCY PROBER
+   ========================================================================== */
+.agent-probe-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 13px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+  gap: 10px;
+}
+
+.probe-result-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.probe-idle {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.probe-loading {
+  color: var(--primary);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.probe-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  font-weight: 600;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.probe-badge.success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+
+.probe-badge.danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+.probe-code {
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+
+.btn-probe-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-default);
+  color: var(--text-normal);
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-probe-node:hover:not(:disabled) {
+  background: var(--primary-subtle);
+  border-color: var(--primary-border);
+  color: var(--primary);
+}
+
+.btn-probe-node:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spin-icon {
+  animation: probeSpin 0.8s linear infinite;
+}
+
+@keyframes probeSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
