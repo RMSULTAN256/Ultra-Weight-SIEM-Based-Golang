@@ -17,10 +17,11 @@ import (
 )
 
 type MetricCollector struct {
-	AgentName  string
-	ServerUrl  string
-	RamLimitMB uint64
-	Client     *http.Client
+	AgentName     string
+	ServerUrl     string
+	RamLimitMB    uint64
+	Client        *http.Client
+	lastLatencyMs float64
 }
 
 func NewMetricCollector(agent, serverUrl string, ramLimit uint64) *MetricCollector {
@@ -99,6 +100,7 @@ func (mc *MetricCollector) CollectMetrics() (*models.DeviceStatus, error) {
 		RAMUsedPct:  usedPct,
 		DiskUsedPct: diskVal,
 		AgentMemMB:  agentAllocmb,
+		LatencyMs:   mc.lastLatencyMs,
 	}, nil
 }
 
@@ -107,13 +109,15 @@ func (mc *MetricCollector) Send(status *models.DeviceStatus) error {
 	if err != nil {
 		return err
 	}
-
+	start := time.Now()
 	resp, err := mc.Client.Post(mc.ServerUrl, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
 
 	defer resp.Body.Close()
+
+	mc.lastLatencyMs = float64(time.Since(start).Microseconds()) / 1000.0
 
 	return nil
 }

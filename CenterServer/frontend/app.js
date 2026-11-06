@@ -1235,6 +1235,7 @@ function renderOverviewFleetSummary() {
           <span class="metric-divider">|</span>
           <span>RAM: <strong class="metric-accent-green">${(item.data.ram_used_pct || 0).toFixed(1)}%</strong></span>
           ${item.data.agent_mem_mb ? `<span class="metric-divider">|</span><span>Agent: <strong class="metric-accent-green">${item.data.agent_mem_mb.toFixed(1)}M</strong></span>` : ''}
+          ${item.data.latency_ms && item.data.latency_ms > 0 ? `<span class="metric-divider">|</span><span>Ping: <strong class="metric-accent" style="color:var(--color-info);">${item.data.latency_ms.toFixed(1)}ms</strong></span>` : ''}
         </div>
       </div>
     `;
@@ -1285,23 +1286,32 @@ function renderFleetCards() {
 
     const agentKey = d.agent_id || d.hostname;
     const probeData = state.nodeProbeResults.get(agentKey);
-    let probeHtml = `<span class="probe-idle">Latensi HTTP belum diuji</span>`;
+    let probeHtml = '';
     if (probeData) {
       if (probeData.is_up) {
         probeHtml = `
           <span class="probe-badge success">
-            ● ${probeData.latency_ms.toFixed(1)} ms
+            ● Web: ${probeData.latency_ms.toFixed(1)} ms
           </span>
           <span class="probe-code">(HTTP ${probeData.status_code || 200})</span>
         `;
       } else {
         probeHtml = `
           <span class="probe-badge danger">
-            ● Offline
+            ● Web: Offline
           </span>
-          <span class="probe-code">(${escapeHtml(probeData.error_msg || 'Unreachable')})</span>
+          <span class="probe-code">(${escapeHtml(probeData.error_msg || 'Refused')})</span>
         `;
       }
+    } else if (d.latency_ms && d.latency_ms > 0) {
+      probeHtml = `
+        <span class="probe-badge success">
+          ● Ping: ${d.latency_ms.toFixed(1)} ms
+        </span>
+        <span class="probe-code">(Agent RTT)</span>
+      `;
+    } else {
+      probeHtml = `<span class="probe-idle">Latensi HTTP belum diuji</span>`;
     }
 
     return `
@@ -1310,7 +1320,7 @@ function renderFleetCards() {
           <div>
             <div class="agent-name">${d.hostname}</div>
             <div class="agent-sub-meta">
-              IP: ${d.source_ip || '127.0.0.1'} &bull; ${d.platform || 'Linux'}${d.agent_mem_mb ? ` &bull; <span style="color:var(--color-success);font-weight:600;">Agent: ${d.agent_mem_mb.toFixed(1)} MB</span>` : ''}
+              IP: ${d.source_ip || '127.0.0.1'} &bull; ${d.platform || 'Linux'}${d.agent_mem_mb ? ` &bull; <span style="color:var(--color-success);font-weight:600;">Agent: ${d.agent_mem_mb.toFixed(1)} MB</span>` : ''}${d.latency_ms > 0 ? ` &bull; <span style="color:var(--color-info);font-weight:600;">Ping: ${d.latency_ms.toFixed(1)} ms</span>` : ''}
             </div>
           </div>
           <div class="agent-header-actions">
@@ -1362,13 +1372,14 @@ function renderFleetCards() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
             </svg>
-            <span>Test Latency</span>
+            <span>Test Web</span>
           </button>
         </div>
 
         <div class="agent-card-footer">
           <span><span class="footer-meta-key">Uptime:</span> ${uptimeStr}</span>
           ${d.agent_mem_mb ? `<span><span class="footer-meta-key">Binary RAM:</span> <strong style="color:var(--color-success);font-weight:600;">${d.agent_mem_mb.toFixed(1)} MB</strong></span>` : ''}
+          ${d.latency_ms > 0 ? `<span><span class="footer-meta-key">Ping:</span> <strong style="color:var(--color-info);font-weight:600;">${d.latency_ms.toFixed(1)} ms</strong></span>` : ''}
           <span><span class="footer-meta-key">Last Seen:</span> ${new Date(item.lastSeen).toLocaleTimeString()}</span>
         </div>
       </div>

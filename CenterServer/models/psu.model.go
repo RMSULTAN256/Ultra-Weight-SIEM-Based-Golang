@@ -14,5 +14,6 @@ type DeviceStatus struct {
 	RAMUsedPct  float64   `json:"ram_used_pct"`
 	DiskUsedPct float64   `json:"disk_used_pct"`
 	AgentMemMB  float64   `json:"agent_mem_mb"`
+	LatencyMs   float64   `json:"latency_ms"`
 	ReceivedAt  time.Time `json:"received_at"`
 }

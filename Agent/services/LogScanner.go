@@ -160,7 +160,6 @@ func (ls *LogCollector) handleLine(rawLine string, target models.TargetConfig) e
 }
 
 func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
-	start := time.Now()
 	jsonData, err := sonic.Marshal(log)
 	if err != nil {
 		return err
