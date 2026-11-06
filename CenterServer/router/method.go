@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"server3/models"
 	"server3/services"
@@ -261,5 +262,47 @@ func (sc *HandleService) HandleStream(c fiber.Ctx) error {
 				return
 			}
 		}
+	})
+}
+
+func (sc *HandleService) HandleProbe(c fiber.Ctx) error {
+	type ProbeReq struct {
+		URL string `json:"url"`
+	}
+
+	var req ProbeReq
+
+	if err := sonic.Unmarshal(c.Body(), &req); err != nil || req.URL == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "URL target wajin diisi [error di handleProbe]"})
+	}
+
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+	}
+
+	start := time.Now()
+
+	resp, err := client.Get(req.URL)
+	latency := time.Since(start)
+	latencyMs := float64(latency.Microseconds()) / 1000.0
+
+	if err != nil {
+		return c.JSON(models.ProbeResult{
+			TargetURL: req.URL,
+			IsUp:      false,
+			LatencyMs: latencyMs,
+			CheckedAt: time.Now(),
+			ErrorMsg:  err.Error(),
+		})
+	}
+
+	defer resp.Body.Close()
+
+	return c.JSON(models.ProbeResult{
+		TargetURL:  req.URL,
+		IsUp:       resp.StatusCode < 500,
+		StatusCode: resp.StatusCode,
+		LatencyMs:  latencyMs,
+		CheckedAt:  time.Now(),
 	})
 }

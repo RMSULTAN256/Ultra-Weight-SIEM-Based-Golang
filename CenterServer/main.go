@@ -112,13 +112,16 @@ func main() {
 		}
 	}()
 
-	app.Post("/api/v1/agent/heartbeat", h.HandleHeartbeat)
-	app.Post("/api/v1/agent/logs", h.HandleIncomingLog)
-	app.Get("/api/v1/ips", h.HandleGetIPs)
-	app.Get("/api/v1/logs", h.HandleGetLogs)
-	app.Post("/api/v1/containment/block", h.HandleBlockIP)
-	app.Get("/api/v1/agents", h.HandleGetAgents)
-	app.Delete("/api/v1/agents/:id", h.HandleDeleteAgent)
+	baseApi := "/api/v1"
+
+	app.Post(baseApi+"/agent/heartbeat", h.HandleHeartbeat)
+	app.Post(baseApi+"/agent/logs", h.HandleIncomingLog)
+	app.Get(baseApi+"/ips", h.HandleGetIPs)
+	app.Get(baseApi+"/logs", h.HandleGetLogs)
+	app.Post(baseApi+"/containment/block", h.HandleBlockIP)
+	app.Get(baseApi+"/agents", h.HandleGetAgents)
+	app.Delete(baseApi+"/agents/:id", h.HandleDeleteAgent)
+	app.Post(baseApi+"/probe", h.HandleProbe)
 
 	port := os.Getenv("PORT")
 	if port == "" {

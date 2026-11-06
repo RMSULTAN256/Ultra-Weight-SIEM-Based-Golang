@@ -32,3 +32,12 @@ type IPTrafficRecord struct {
 	ThreatLevel  string    `json:"threat_level"` // "Normal", "Suspicious", "Critical"
 	Status       string    `json:"status"`       // "Monitored", "Blocked (iptables)"
 }
+
+type ProbeResult struct {
+	TargetURL  string    `json:"target_url"`
+	IsUp       bool      `json:"is_up"`
+	StatusCode int       `json:"status_code"`
+	LatencyMs  float64   `json:"latency_ms"`
+	CheckedAt  time.Time `json:"checked_at"`
+	ErrorMsg   string    `json:"error_msg"`
+}

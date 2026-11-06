@@ -117,3 +117,17 @@ func (mc *MetricCollector) Send(status *models.DeviceStatus) error {
 
 	return nil
 }
+
+func (mc *MetricCollector) TestConnection() (time.Duration, error) {
+	start := time.Now()
+
+	resp, err := mc.Client.Get(mc.ServerUrl + "/api/v1/agents")
+	if err != nil {
+		return 0, fmt.Errorf("Server unreachable: %w", err)
+	}
+
+	defer resp.Body.Close()
+
+	rtt := time.Since(start)
+	return rtt, nil
+}

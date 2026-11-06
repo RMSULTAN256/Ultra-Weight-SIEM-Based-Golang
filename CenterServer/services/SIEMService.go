@@ -45,6 +45,7 @@ func NewSIEMService() *SIEMService {
 func (s *SIEMService) loadInitialData() {
 	// 1. Load historical events from events.ndjson or seed file
 	eventFiles := []string{
+		"data/events.ndjson",
 		"events.ndjson",
 		"CenterServer/events.ndjson",
 		"../data/logs/siem_events_ndjson.json",
@@ -93,6 +94,11 @@ func (s *SIEMService) loadInitialData() {
 				s.AddLog(log)
 			}
 		}
+
+		if err := scanner.Err(); err != nil {
+			fmt.Printf("[WARN] Pembacaan log terputus pada %s: %v\n", path, err)
+		}
+
 		file.Close()
 		if len(s.logs) > 0 {
 			break
@@ -128,6 +134,11 @@ func (s *SIEMService) loadInitialData() {
 				s.RecordIP(hb.SourceIP, hb.Hostname, "Agent Heartbeat", "Normal")
 			}
 		}
+
+		if err := scanner.Err(); err != nil {
+			fmt.Printf("[WARN] Pembacaan log terputus pada %s: %v\n", path, err)
+		}
+
 		file.Close()
 		if len(s.agents) > 0 {
 			break
