@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"crypto/subtle"
 	"io"
 	"os"
 	"server3/models"
@@ -10,6 +11,9 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 type GRPCServer struct {
@@ -24,6 +28,21 @@ func NewGRPCServer(siemSvc *services.SIEMService) *GRPCServer {
 }
 
 func (s *GRPCServer) StreamLogs(stream proto.IngestionService_StreamLogsServer) error {
+	want := os.Getenv("AGENT_API_KEY")
+	if want == "" {
+		return status.Errorf(codes.NotFound, "Token not found")
+	}
+
+	md, ok := metadata.FromIncomingContext(stream.Context())
+	if !ok {
+		return status.Error(codes.Unauthenticated, "metadata not found")
+	}
+
+	keys := md.Get("x-agent-key")
+	if len(keys) == 0 || subtle.ConstantTimeCompare([]byte(keys[0]), []byte(want)) != 1 {
+		return status.Errorf(codes.Unauthenticated, "Token invalid")
+	}
+
 	for {
 		packet, err := stream.Recv()
 		if err == io.EOF {
