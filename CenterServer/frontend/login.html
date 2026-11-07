@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login | Wazuh-Lean Mini-SIEM SOC</title>
-  <link rel="stylesheet" href="/style.css?v=3.2">
+  <link rel="stylesheet" href="/style.css?v=3.3">
   <style>
     body.login-page {
       display: flex;
@@ -189,9 +189,6 @@
 
     <div class="auth-footer-note">
       🔒 Authorized Personnel Only • Protected by Zero-Trust
-      <div style="margin-top: 8px; color: var(--text-dim); font-size: 11px; font-family: var(--font-mono);">
-        Demo Credentials: <strong style="color: var(--primary);">admin</strong> / <strong style="color: var(--primary);">admin123</strong>
-      </div>
     </div>
   </div>
 
@@ -209,6 +206,38 @@
       box.textContent = '';
     }
 
+    const AUTH_KEYS = ['auth_token', 'auth_user', 'auth_role'];
+
+    function decodeJwtPayload(t) {
+      try {
+        const b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b + '='.repeat((4 - (b.length % 4)) % 4);
+        const raw = atob(pad);
+        let out = '';
+        for (let i = 0; i < raw.length; i++) {
+          out += '%' + ('00' + raw.charCodeAt(i).toString(16)).slice(-2);
+        }
+        return JSON.parse(decodeURIComponent(out));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Token kedaluwarsa harus dianggap tidak ada. Tanpa ini, halaman login
+    // akan terus melempar user ke dashboard yang sudah tidak bisa memuat data.
+    function getValidToken() {
+      const t = localStorage.getItem('auth_token');
+      if (!t) return null;
+      const p = decodeJwtPayload(t);
+      if (!p) return null;
+      if (typeof p.exp === 'number' && p.exp * 1000 <= Date.now()) return null;
+      return t;
+    }
+
+    function clearSession() {
+      AUTH_KEYS.forEach(k => localStorage.removeItem(k));
+    }
+
     async function handleLoginSubmit(e) {
       e.preventDefault();
       clearAlert();
@@ -223,26 +252,37 @@
       try {
         const resp = await fetch('/api/v1/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({ username, password })
         });
 
-        const data = await resp.json();
+        // Rate limit: backend membalas 429 setelah 5 percobaan / menit
+        if (resp.status === 429) {
+          showAlert('Terlalu banyak percobaan login. Tunggu 1 menit lalu coba lagi.', 'error');
+          return;
+        }
+
+        let data = {};
+        try { data = await resp.json(); } catch (_) { /* respons bukan JSON */ }
 
         if (!resp.ok) {
           showAlert(data.error || 'Username atau password salah', 'error');
           return;
         }
 
+        if (!data.token) {
+          showAlert('Respons server tidak berisi token.', 'error');
+          return;
+        }
+
+        clearSession();
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('auth_user', data.username || username);
+        localStorage.setItem('auth_role', (data.role || 'analyst').toLowerCase());
+
         showAlert('Login berhasil! Mengalihkan ke dashboard...', 'success');
 
-        localStorage.setItem('auth_token', data.token);
-        localStorage.setItem('auth_user', data.username);
-        localStorage.setItem('auth_role', data.role);
-
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 500);
+        setTimeout(() => { window.location.replace('/'); }, 500);
 
       } catch (err) {
         showAlert('Gagal terhubung ke server SIEM: ' + err.message, 'error');
@@ -252,11 +292,27 @@
       }
     }
 
-    // Auto-redirect jika sudah ada sesi login aktif
+    // Auto-redirect hanya kalau sesi masih sah
     window.addEventListener('DOMContentLoaded', () => {
-      if (localStorage.getItem('auth_token')) {
+      const reason = new URLSearchParams(window.location.search).get('reason');
+
+      if (reason === 'expired') {
+        clearSession();
+        showAlert('Sesi Anda sudah berakhir. Silakan login kembali.', 'error');
+        return;
+      }
+      if (reason === 'logout') {
+        clearSession();
+        showAlert('Anda telah keluar dari sistem.', 'success');
+        return;
+      }
+
+      if (getValidToken()) {
         showAlert('Sesi aktif terdeteksi. Mengalihkan ke dashboard...', 'success');
-        setTimeout(() => { window.location.href = '/'; }, 400);
+        setTimeout(() => { window.location.replace('/'); }, 400);
+      } else {
+        // Bersihkan sisa token rusak/kedaluwarsa
+        clearSession();
       }
     });
   </script>

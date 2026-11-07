@@ -1,7 +1,9 @@
 package databases
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,7 +46,12 @@ func NewDBService(dbPath string) (*DBService, error) {
 	db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
 	if userCount == 0 {
 		defaultUser := "admin"
-		defaultPass := "admin123"
+		defaultPass := os.Getenv("ADMIN_INIT_PASSWORD")
+		if defaultPass == "" {
+			b := make([]byte, 16)
+			rand.Read(b)
+			defaultPass = hex.EncodeToString(b)
+		}
 		if hash, err := auth.HashPassword(defaultPass); err == nil {
 			db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')", defaultUser, string(hash))
 			fmt.Printf("[AUTH SEED] Akun default dibuat: Username: %s | Password: %s (Role: admin)\n", defaultUser, defaultPass)
@@ -81,4 +88,10 @@ func (s *DBService) Authenticate(username, plainPassword string) (bool, string, 
 		return false, "", fmt.Errorf("password salah")
 	}
 	return true, role, nil
+}
+
+func (s *DBService) CountUsers() (int, error) {
+	var n int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM USERS").Scan(&n)
+	return n, err
 }

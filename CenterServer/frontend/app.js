@@ -3,20 +3,83 @@
 // Dynamic State Management, 1,000-Log Cap, & Real-Time Pagination
 // ==========================================================================
 
-// 1. Authentication Guard
-const token = localStorage.getItem('auth_token');
-const currentUser = localStorage.getItem('auth_user') || 'Analyst';
-const currentRole = localStorage.getItem('auth_role') || 'analyst';
+// 1. AUTH LAYER — JWT guard, header injector, global 401 handler
+const AUTH_KEYS = ['auth_token', 'auth_user', 'auth_role'];
+const LOGIN_URL = '/login.html';
 
-if (!token) {
-  window.location.href = '/login.html';
+/** Decode payload JWT tanpa library. Null kalau token rusak. */
+function decodeJwtPayload(t) {
+  try {
+    const b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b + '='.repeat((4 - (b.length % 4)) % 4);
+    const raw = atob(pad);
+    let out = '';
+    for (let i = 0; i < raw.length; i++) {
+      out += '%' + ('00' + raw.charCodeAt(i).toString(16)).slice(-2);
+    }
+    return JSON.parse(decodeURIComponent(out));
+  } catch (_) {
+    return null;
+  }
 }
 
+/** Token dianggap tidak ada kalau kosong / rusak / exp sudah lewat. */
+function getValidToken() {
+  const t = localStorage.getItem('auth_token');
+  if (!t) return null;
+  const p = decodeJwtPayload(t);
+  if (!p) return null;
+  if (typeof p.exp === 'number' && p.exp * 1000 <= Date.now()) return null;
+  return t;
+}
+
+function clearSession() {
+  AUTH_KEYS.forEach(k => localStorage.removeItem(k));
+}
+
+function redirectToLogin(reason) {
+  clearSession();
+  window.location.replace(LOGIN_URL + (reason ? '?reason=' + reason : ''));
+}
+
+/** Header Authorization otomatis, digabung dengan header lain. */
+function authHeaders(extra) {
+  const t = getValidToken();
+  const h = Object.assign({}, extra || {});
+  if (t) h['Authorization'] = 'Bearer ' + t;
+  return h;
+}
+
+/** Semua request API lewat sini: header otomatis + tangkap 401 global. */
+async function authFetch(url, options) {
+  const opts = Object.assign({}, options || {});
+  opts.headers = authHeaders(opts.headers);
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    redirectToLogin('expired');
+    throw new Error('Sesi berakhir, silakan login ulang.');
+  }
+  return res;
+}
+
+// Guard halaman
+const storedToken = localStorage.getItem('auth_token');
+let token = getValidToken();
+const AUTH_OK = !!token;
+if (!AUTH_OK) {
+  redirectToLogin(storedToken ? 'expired' : '');
+}
+
+const currentUser = localStorage.getItem('auth_user') || 'Analyst';
+const currentRole = (localStorage.getItem('auth_role') || 'analyst').toLowerCase();
+const isAdmin = () => currentRole === 'admin';
+
 function handleLogout() {
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('auth_user');
-  localStorage.removeItem('auth_role');
-  window.location.href = '/login.html';
+  try {
+    if (window.__sse) window.__sse.close();
+  } catch (_) { /* abaikan */ }
+  clearSession();
+  window.location.replace(LOGIN_URL + '?reason=logout');
 }
 
 // 2. Application Global State
@@ -220,7 +283,7 @@ function normalizeLogItem(item) {
 // 1. Load Initial Logs from Server Buffer
 async function loadInitialLogs() {
   try {
-    const res = await fetch(`/api/v1/logs?limit=${MAX_BUFFER_CAP}`);
+    const res = await authFetch(`/api/v1/logs?limit=${MAX_BUFFER_CAP}`);
     if (res.ok) {
       const logs = await res.json();
       if (Array.isArray(logs)) {
@@ -250,7 +313,7 @@ async function loadInitialLogs() {
 // 2. Load Initial Agents from Server
 async function loadInitialAgents() {
   try {
-    const res = await fetch('/api/v1/agents');
+    const res = await authFetch('/api/v1/agents');
     if (res.ok) {
       const list = await res.json();
       if (Array.isArray(list) && list.length > 0) {
@@ -266,7 +329,7 @@ async function loadInitialAgents() {
 // 3. Load Initial IPs from Server
 async function loadInitialIPs() {
   try {
-    const res = await fetch('/api/v1/ips');
+    const res = await authFetch('/api/v1/ips');
     if (res.ok) {
       const list = await res.json();
       if (Array.isArray(list)) {
@@ -288,9 +351,15 @@ function connectSSE() {
   const topStreamDot = document.getElementById('topStreamDot');
   const topStreamStatus = document.getElementById('topStreamStatus');
 
-  const evtSource = new EventSource('/api/v1/stream');
+  // EventSource tidak bisa mengirim header custom -> token lewat query string
+  const streamToken = getValidToken() || '';
+  const evtSource = new EventSource('/api/v1/stream?token=' + encodeURIComponent(streamToken));
+  window.__sse = evtSource;
+
+  let streamErrors = 0;
 
   evtSource.onopen = () => {
+    streamErrors = 0;
     if (sideStreamDot) sideStreamDot.className = "dot green";
     if (sideStreamText) sideStreamText.textContent = "Cluster Online";
     if (topStreamDot) topStreamDot.style.backgroundColor = "var(--color-success)";
@@ -302,6 +371,13 @@ function connectSSE() {
     if (sideStreamText) sideStreamText.textContent = "Reconnecting...";
     if (topStreamDot) topStreamDot.style.backgroundColor = "var(--color-danger)";
     if (topStreamStatus) topStreamStatus.textContent = "RECONNECTING";
+
+    // EventSource menutupi status HTTP: setelah 3x gagal, uji sesi lewat request
+    // biasa. Kalau token sudah mati, authFetch akan melempar user ke halaman login.
+    streamErrors += 1;
+    if (streamErrors === 3) {
+      authFetch('/api/v1/agents').catch(() => { /* sudah ditangani authFetch */ });
+    }
   };
 
   evtSource.onmessage = (e) => {
@@ -1041,7 +1117,7 @@ function renderIPTable() {
             <strong class="containment-ip">${r.ip}</strong>
             <span class="containment-rule">Rule: iptables -I INPUT -s ${r.ip} -j DROP</span>
           </div>
-          <button class="btn-action" onclick="toggleBlockIP('${r.ip}')">Unblock</button>
+          ${isAdmin() ? `<button class="btn-action" onclick="toggleBlockIP('${r.ip}')">Unblock</button>` : ''}
         </div>
       `).join('');
     } else {
@@ -1093,7 +1169,7 @@ function renderIPTable() {
           <td><span class="badge-level ${threatClass}">${r.threat_level || 'Normal'}</span></td>
           <td>
             <span class="badge-status ${statusClass}">${r.status || 'Monitored'}</span>
-            <button class="btn-action ${btnDanger}" style="margin-left: 8px;" onclick="toggleBlockIP('${r.ip}')">${actionBtnText}</button>
+            ${isAdmin() ? `<button class="btn-action ${btnDanger}" style="margin-left: 8px;" onclick="toggleBlockIP('${r.ip}')">${actionBtnText}</button>` : ''}
           </td>
         </tr>
       `;
@@ -1143,8 +1219,12 @@ if (ipPageSizeSelect) {
 }
 
 async function toggleBlockIP(ip) {
+  if (!isAdmin()) {
+    alert('Akses ditolak: hanya role admin yang boleh mengubah aturan containment.');
+    return;
+  }
   try {
-    const res = await fetch('/api/v1/containment/block', {
+    const res = await authFetch('/api/v1/containment/block', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ip: ip })
@@ -1285,34 +1365,6 @@ function renderFleetCards() {
       : '-';
 
     const agentKey = d.agent_id || d.hostname;
-    const probeData = state.nodeProbeResults.get(agentKey);
-    let probeHtml = '';
-    if (probeData) {
-      if (probeData.is_up) {
-        probeHtml = `
-          <span class="probe-badge success">
-            ● Web: ${probeData.latency_ms.toFixed(1)} ms
-          </span>
-          <span class="probe-code">(HTTP ${probeData.status_code || 200})</span>
-        `;
-      } else {
-        probeHtml = `
-          <span class="probe-badge danger">
-            ● Web: Offline
-          </span>
-          <span class="probe-code">(${escapeHtml(probeData.error_msg || 'Refused')})</span>
-        `;
-      }
-    } else if (d.latency_ms && d.latency_ms > 0) {
-      probeHtml = `
-        <span class="probe-badge success">
-          ● Ping: ${d.latency_ms.toFixed(1)} ms
-        </span>
-        <span class="probe-code">(Agent RTT)</span>
-      `;
-    } else {
-      probeHtml = `<span class="probe-idle">Latensi HTTP belum diuji</span>`;
-    }
 
     return `
       <div class="fleet-card" id="agent-card-${agentKey}">
@@ -1328,7 +1380,7 @@ function renderFleetCards() {
               <span class="status-dot"></span>
               ${isOnline ? 'Active' : 'Offline'}
             </span>
-            <button class="btn-remove-node" onclick="removeFleetAgent('${agentKey}')" title="Hapus node ini dari monitoring">&times;</button>
+            ${isAdmin() ? `<button class="btn-remove-node" onclick="removeFleetAgent('${agentKey}')" title="Hapus node ini dari monitoring">&times;</button>` : ''}
           </div>
         </div>
 
@@ -1364,18 +1416,6 @@ function renderFleetCards() {
           </div>
         </div>
 
-        <div class="agent-probe-row">
-          <div class="probe-result-box" id="probe-result-${agentKey}">
-            ${probeHtml}
-          </div>
-          <button class="btn-probe-node" id="btn-probe-${agentKey}" onclick="probeAgentNode('${agentKey}', '${d.source_ip || '127.0.0.1'}')" title="Uji latensi pengiriman & koneksi HTTP">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-            <span>Test Web</span>
-          </button>
-        </div>
-
         <div class="agent-card-footer">
           <span><span class="footer-meta-key">Uptime:</span> ${uptimeStr}</span>
           ${d.agent_mem_mb ? `<span><span class="footer-meta-key">Binary RAM:</span> <strong style="color:var(--color-success);font-weight:600;">${d.agent_mem_mb.toFixed(1)} MB</strong></span>` : ''}
@@ -1402,6 +1442,10 @@ function escapeHtml(str) {
 
 // Hapus node agent dari dashboard dan backend
 async function removeFleetAgent(agentId) {
+  if (!isAdmin()) {
+    alert('Akses ditolak: hanya role admin yang boleh menghapus node.');
+    return;
+  }
   if (!confirm(`Hapus node "${agentId}" dari monitoring fleet?`)) {
     return;
   }
@@ -1418,7 +1462,7 @@ async function removeFleetAgent(agentId) {
   renderOverviewFleetSummary();
 
   try {
-    const res = await fetch(`/api/v1/agents/${encodeURIComponent(agentId)}`, {
+    const res = await authFetch(`/api/v1/agents/${encodeURIComponent(agentId)}`, {
       method: 'DELETE'
     });
     if (!res.ok) {
@@ -1449,7 +1493,7 @@ async function probeAgentNode(agentKey, ip) {
   const targetUrl = (ip.startsWith('http://') || ip.startsWith('https://')) ? ip : `http://${ip}`;
 
   try {
-    const res = await fetch('/api/v1/probe', {
+    const res = await authFetch('/api/v1/probe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: targetUrl })
@@ -1471,6 +1515,9 @@ async function probeAgentNode(agentKey, ip) {
 // APPLICATION INITIALIZATION
 // ==========================================================================
 async function initApp() {
+  // Kalau token tidak sah, halaman sedang dialihkan ke login — jangan lanjut.
+  if (!AUTH_OK) return;
+
   const userBadge = document.getElementById('userProfileName');
   if (userBadge) {
     userBadge.textContent = `${currentUser} (${currentRole.toUpperCase()})`;

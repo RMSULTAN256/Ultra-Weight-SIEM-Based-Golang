@@ -1,6 +1,8 @@
 package router
 
 import (
+	"log"
+	"os"
 	"server3/databases"
 	"server3/models"
 	"time"
@@ -19,6 +21,14 @@ func NewAuthHandler(db *databases.DBService) *AuthHandler {
 
 var SecretKey = []byte("AmboiSiPadangni")
 
+func InitSecret() {
+	s := os.Getenv("JWT_SECRET")
+	if len(s) < 32 {
+		log.Fatal("[FATAL] JWT_SECRET wajib di-set, minimal 32 karakter")
+	}
+	SecretKey = []byte(s)
+}
+
 func (d *AuthHandler) HandleRegister(c fiber.Ctx) error {
 	var req models.AuthRequest
 
@@ -30,8 +40,14 @@ func (d *AuthHandler) HandleRegister(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Username invalid and Password Minimal 6 Character"})
 	}
 
-	if req.Role == "" {
-		req.Role = "admin"
+	// Role default "analyst" dan hanya role yang dikenal yang diterima.
+	// Tanpa validasi ini, user baru otomatis menjadi admin (privilege escalation).
+	switch req.Role {
+	case "":
+		req.Role = "analyst"
+	case "admin", "analyst":
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Role harus 'admin' atau 'analyst'"})
 	}
 
 	err := d.db.RegisterUser(req.Username, req.Password, req.Role)

@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
@@ -25,6 +26,9 @@ import (
 var frontendFS embed.FS
 
 func main() {
+	// 0. Muat JWT secret dari environment (fail-fast bila kosong / kurang dari 32 karakter)
+	router.InitSecret()
+
 	app := fiber.New(
 		fiber.Config{
 			TrustProxy:  true,
@@ -42,7 +46,6 @@ func main() {
 	}
 	authHandler := router.NewAuthHandler(dbService)
 
-	// 2. Static Files dari embedded frontend/ folder
 	subFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
 		log.Fatalf("Failed to initialize frontend filesystem: %v", err)
@@ -60,19 +63,33 @@ func main() {
 		},
 	}))
 
-	// 3. Inisialisasi SIEM Service & Router
 	siemService := services.NewSIEMService()
 	h := router.NewHandleSiem(siemService)
 
-	// 4. Daftarkan Routes Auth & Login
+	loginLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 1 * time.Minute,
+		LimitReached: func(c fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Too many Request, please try again later",
+			})
+		},
+	})
+
 	app.Get("/login", func(c fiber.Ctx) error {
 		return c.Redirect().To("/login.html")
 	})
-	app.Post("/api/v1/auth/register", authHandler.HandleRegister)
-	app.Post("/api/v1/auth/login", authHandler.HandleLogin)
+	// Registrasi publik sengaja TIDAK didaftarkan di sini: akun admin dibuat oleh
+	// seed database (ADMIN_INIT_PASSWORD). Pembuatan user hanya tersedia di area
+	// admin-only (POST /api/v1/users) agar tidak jadi jalur eskalasi role.
+	// Fiber v3 mengeksekusi handler sesuai urutan argumen, jadi limiter ditaruh
+	// paling depan supaya berjalan SEBELUM HandleLogin.
+	app.Post("/api/v1/auth/login", loginLimiter, authHandler.HandleLogin)
 
 	// 5. Daftarkan Routes SIEM Telemetri
-	app.Get("/api/v1/stream", h.HandleStream)
+	// SSE: EventSource tidak bisa mengirim header Authorization, jadi token
+	// dikirim lewat ?token= dan diverifikasi sebelum stream dibuka.
+	app.Get("/api/v1/stream", router.RequireStreamAuth(), h.HandleStream)
 	go func() {
 		ticker := time.NewTicker(4 * time.Second)
 		defer ticker.Stop()
@@ -112,16 +129,25 @@ func main() {
 		}
 	}()
 
-	baseApi := "/api/v1"
+	// 5a. API Agen (machine-to-machine, wajib header X-Agent-Key).
+	// Didaftarkan SEBELUM baseApi karena baseApi memakai prefix "/api/v1" yang
+	// juga mencakup "/api/v1/agent/*"; kalau urutannya terbalik, RequireAuth
+	// akan menolak heartbeat & log dari agen lebih dulu.
+	agentApi := app.Group("/api/v1/agent", router.RequireAgentKey())
+	agentApi.Post("/heartbeat", h.HandleHeartbeat)
+	agentApi.Post("/logs", h.HandleIncomingLog)
 
-	app.Post(baseApi+"/agent/heartbeat", h.HandleHeartbeat)
-	app.Post(baseApi+"/agent/logs", h.HandleIncomingLog)
-	app.Get(baseApi+"/ips", h.HandleGetIPs)
-	app.Get(baseApi+"/logs", h.HandleGetLogs)
-	app.Post(baseApi+"/containment/block", h.HandleBlockIP)
-	app.Get(baseApi+"/agents", h.HandleGetAgents)
-	app.Delete(baseApi+"/agents/:id", h.HandleDeleteAgent)
-	app.Post(baseApi+"/probe", h.HandleProbe)
+	// 5b. API Dashboard (JWT)
+	baseApi := app.Group("/api/v1", router.RequireAuth())
+	baseApi.Get("/logs", h.HandleGetLogs)
+	baseApi.Get("/agents", h.HandleGetAgents)
+	baseApi.Get("/ips", h.HandleGetIPs)
+	baseApi.Post("/probe", h.HandleProbe)
+
+	adminOnly := baseApi.Group("/", router.RequireRole("admin"))
+	adminOnly.Delete("/agents/:id", h.HandleDeleteAgent)
+	adminOnly.Post("/containment/block", h.HandleBlockIP)
+	adminOnly.Post("/users", authHandler.HandleRegister)
 
 	port := os.Getenv("PORT")
 	if port == "" {
