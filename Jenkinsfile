@@ -50,23 +50,23 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'vps-password', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh '''
                         cd Agent
-                                                # 1. Deploy ke Prod-1
+                        # 1. Deploy ke Prod-1 (Server Baru: 31.56.56.50:30061)
                         # Step A: Stop service & pastikan folder config ada
-                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
-                            "mkdir -p /home/ubuntu/project/config && echo '$PASS' | sudo -S systemctl stop agentGowaz"
+                        sshpass -p "$PASS" ssh -F /dev/null -p 30061 -o StrictHostKeyChecking=no $USER@31.56.56.50 \
+                            "mkdir -p /home/ubuntu/project/config && echo '$PASS' | sudo -S systemctl stop agentGo"
                         
                         # Step B: Copy binary & file konfigurasi
-                        sshpass -p "$PASS" scp -F /dev/null -P 25187 -o StrictHostKeyChecking=no \
-                            AgentServerOnline $USER@163.52.135.168:/home/ubuntu/project/
-                        sshpass -p "$PASS" scp -F /dev/null -P 25187 -o StrictHostKeyChecking=no \
-                            config/log_collector.json $USER@163.52.135.168:/home/ubuntu/project/config/
-                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
+                        sshpass -p "$PASS" scp -F /dev/null -P 30061 -o StrictHostKeyChecking=no \
+                            AgentServerOnline $USER@31.56.56.50:/home/ubuntu/project/
+                        sshpass -p "$PASS" scp -F /dev/null -P 30061 -o StrictHostKeyChecking=no \
+                            config/log_collector.json $USER@31.56.56.50:/home/ubuntu/project/config/
+                        sshpass -p "$PASS" ssh -F /dev/null -p 30061 -o StrictHostKeyChecking=no $USER@31.56.56.50 \
                             "chmod +x /home/ubuntu/project/AgentServerOnline"
 
                         # Step C: Start service kembali
-                        sshpass -p "$PASS" ssh -F /dev/null -p 25187 -o StrictHostKeyChecking=no $USER@163.52.135.168 \
-                            "echo '$PASS' | sudo -S systemctl start agentGowaz"
-                        # 2. Deploy ke Prod-2
+                        sshpass -p "$PASS" ssh -F /dev/null -p 30061 -o StrictHostKeyChecking=no $USER@31.56.56.50 \
+                            "echo '$PASS' | sudo -S systemctl start agentGo"
+                        # 2. Deploy ke Prod-2 (Server Lama: 163.52.135.170:27151)
 
                         # Step A: Stop service & pastikan folder config ada
                         sshpass -p "$PASS" ssh -F /dev/null -p 27151 -o StrictHostKeyChecking=no $USER@163.52.135.170 \
