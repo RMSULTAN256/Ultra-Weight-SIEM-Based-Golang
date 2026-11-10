@@ -19,11 +19,11 @@ import (
 )
 
 type LogCollector struct {
-	ServerUrl, AgentName string
-	Client               *http.Client
-	GRPCClient           *GRPCClient
-	fileOffsets          map[string]int64
-	state                map[string]fileState
+	ServerUrl, AgentName, AgentKey string
+	Client                         *http.Client
+	GRPCClient                     *GRPCClient
+	fileOffsets                    map[string]int64
+	state                          map[string]fileState
 }
 
 type fileState struct {
@@ -48,10 +48,11 @@ var rules = []struct {
 	{"invalid user", "auth_failure", 6},
 }
 
-func NewLogCollector(serverUrl, agentName string) *LogCollector {
+func NewLogCollector(serverUrl, agentName, agentKey string) *LogCollector {
 	return &LogCollector{
 		ServerUrl: serverUrl,
 		AgentName: agentName,
+		AgentKey:  agentKey,
 		Client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -175,7 +176,17 @@ func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
 	}
 
 	endPoint := ls.ServerUrl + "/api/v1/agent/logs"
-	resp, err := ls.Client.Post(endPoint, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest(http.MethodPost, endPoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// CenterServer mewajibkan header ini pada /api/v1/agent/* (RequireAgentKey).
+	if ls.AgentKey != "" {
+		req.Header.Set("X-Agent-Key", ls.AgentKey)
+	}
+
+	resp, err := ls.Client.Do(req)
 	if err != nil {
 		return fmt.Errorf("gRPC & HTTP fallback gagal: %w", err)
 	}

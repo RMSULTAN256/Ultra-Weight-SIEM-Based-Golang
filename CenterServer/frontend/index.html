@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wazuh-Lean | Ultra-Lightweight SIEM SOC Dashboard</title>
-  <link rel="stylesheet" href="/style.css?v=3.3">
+  <link rel="stylesheet" href="/style.css?v=3.5-ssh">
 </head>
 <body>
   <!-- ======================================================== -->
@@ -571,6 +571,108 @@
     </div>
   </div>
 
-  <script src="/app.js?v=3.4-auth"></script>
+  <!-- Modal Remote SSH Command Console -->
+  <div id="sshModal" class="modal-backdrop hidden">
+    <div class="modal-dialog modal-dialog-lg">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <span class="ssh-terminal-badge">&gt;_</span>
+          <div>
+            <h3 id="sshModalTitle">Remote SSH Console</h3>
+            <span class="ssh-modal-sub" id="sshModalSub">Target: Connecting...</span>
+          </div>
+        </div>
+        <button id="closeSshModalBtn" class="close-btn" onclick="closeRemoteShell()" title="Close">&times;</button>
+      </div>
+
+      <div class="modal-body ssh-modal-body">
+        <!-- Preset Whitelist Bar -->
+        <div class="ssh-preset-section">
+          <div class="ssh-section-label">PRESET PERINTAH CEPAT (WHITELIST):</div>
+          <div class="ssh-preset-pills">
+            <button type="button" class="ssh-preset-btn active" data-key="uptime" onclick="selectSshPreset('uptime')">
+              <span class="pill-icon">⚡</span> uptime
+            </button>
+            <button type="button" class="ssh-preset-btn" data-key="agent_status" onclick="selectSshPreset('agent_status')">
+              <span class="pill-icon">🛡️</span> agent-status
+            </button>
+            <button type="button" class="ssh-preset-btn" data-key="memory" onclick="selectSshPreset('memory')">
+              <span class="pill-icon">💾</span> free -h
+            </button>
+            <button type="button" class="ssh-preset-btn" data-key="disk" onclick="selectSshPreset('disk')">
+              <span class="pill-icon">💽</span> df -h
+            </button>
+            <button type="button" class="ssh-preset-btn" data-key="ports" onclick="selectSshPreset('ports')">
+              <span class="pill-icon">🌐</span> ss -tuln
+            </button>
+            <button type="button" class="ssh-preset-btn" data-key="who" onclick="selectSshPreset('who')">
+              <span class="pill-icon">👥</span> who
+            </button>
+            <button type="button" class="ssh-preset-btn danger-preset" data-key="restart_agent" onclick="selectSshPreset('restart_agent')">
+              <span class="pill-icon">🔄</span> restart-agent
+            </button>
+          </div>
+        </div>
+
+        <!-- Command Selector & Execution Row -->
+        <div class="ssh-command-row">
+          <div class="ssh-select-wrap">
+            <label for="sshCommandSelect" class="ssh-input-label">Command Key Terdaftar:</label>
+            <select id="sshCommandSelect" class="ssh-select" onchange="syncPresetSelection()">
+              <option value="uptime">uptime &mdash; Server load &amp; uptime</option>
+              <option value="agent_status">agent_status &mdash; Check status service Agent Go</option>
+              <option value="memory">memory &mdash; Memory RAM usage (free -h)</option>
+              <option value="disk">disk &mdash; Disk space partition (df -h)</option>
+              <option value="ports">ports &mdash; Open listening ports (ss -tuln)</option>
+              <option value="who">who &mdash; Active logged in users</option>
+              <option value="restart_agent">restart_agent &mdash; Restart SIEM Agent service</option>
+            </select>
+          </div>
+          <button id="btnRunSsh" class="btn-primary btn-run-ssh" onclick="executeRemoteCommand()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span>Run Command</span>
+          </button>
+        </div>
+
+        <!-- Terminal Output Window -->
+        <div class="ssh-terminal-box">
+          <div class="ssh-terminal-topbar">
+            <div class="ssh-terminal-dots">
+              <span class="t-dot t-dot-red"></span>
+              <span class="t-dot t-dot-yellow"></span>
+              <span class="t-dot t-dot-green"></span>
+              <span class="ssh-terminal-session" id="sshSessionInfo">session: ready</span>
+            </div>
+            <div class="ssh-terminal-actions">
+              <button class="btn-terminal-action" onclick="copyTerminalOutput()" title="Copy Output">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                Copy
+              </button>
+              <button class="btn-terminal-action" onclick="clearTerminalOutput()" title="Clear Console">
+                Clear
+              </button>
+            </div>
+          </div>
+          <pre id="sshTerminalOutput" class="ssh-terminal-pre">Pilih perintah di atas dan klik [Run Command] untuk mengeksekusi via SSH.</pre>
+        </div>
+      </div>
+
+      <div class="modal-footer ssh-modal-footer">
+        <div class="ssh-footer-meta" id="sshFooterMeta">
+          <span>Auth: <strong>Ed25519 Key</strong></span> &bull;
+          <span>Target: <strong id="sshFooterTarget">-</strong></span> &bull;
+          <span>Role: <strong style="color:var(--color-success)">Admin</strong></span>
+        </div>
+        <button onclick="closeRemoteShell()" class="btn-secondary">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=3.5-ssh"></script>
 </body>
 </html>

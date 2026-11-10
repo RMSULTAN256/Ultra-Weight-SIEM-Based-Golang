@@ -113,6 +113,7 @@ const state = {
 
   // Latency Probe Results per Agent
   nodeProbeResults: new Map(),
+  currentSshAgent: null,
 
   // Inbound IP Traffic Pagination & Filtering
   ipsPagination: {
@@ -1376,6 +1377,14 @@ function renderFleetCards() {
             </div>
           </div>
           <div class="agent-header-actions">
+            ${isAdmin() ? `
+              <button class="btn-shell-terminal" onclick="openRemoteShell('${agentKey}', '${d.source_ip || ''}')" title="Buka Remote SSH Console (Admin Only)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 17 10 11 4 5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+              </button>
+            ` : ''}
             <span class="status-pill ${isOnline ? 'online' : 'offline'}">
               <span class="status-dot"></span>
               ${isOnline ? 'Active' : 'Offline'}
@@ -1508,6 +1517,155 @@ async function probeAgentNode(agentKey, ip) {
       latency_ms: 0
     });
     renderFleetCards();
+  }
+}
+
+// ==========================================================================
+// REMOTE SSH CONSOLE & COMMAND EXECUTION (ADMIN ONLY)
+// ==========================================================================
+function openRemoteShell(agentId, ip) {
+  if (!isAdmin()) {
+    alert("Akses ditolak: Hanya role admin yang diizinkan membuka Remote SSH Console.");
+    return;
+  }
+
+  state.currentSshAgent = { id: agentId, ip: ip || '-' };
+
+  const modal = document.getElementById('sshModal');
+  const title = document.getElementById('sshModalTitle');
+  const sub = document.getElementById('sshModalSub');
+  const session = document.getElementById('sshSessionInfo');
+  const target = document.getElementById('sshFooterTarget');
+  const output = document.getElementById('sshTerminalOutput');
+
+  if (title) title.textContent = `Remote SSH Console — ${agentId}`;
+  if (sub) sub.textContent = `Target: ${agentId} (${ip || '127.0.0.1'})`;
+  if (session) session.textContent = `node: ${agentId}`;
+  if (target) target.textContent = ip || agentId;
+  if (output) {
+    output.textContent = `[READY] Terkoneksi ke sesi dispatcher node: ${agentId}\nPilih perintah terdaftar di atas dan klik [Run Command] untuk eksekusi via SSH.`;
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeRemoteShell() {
+  const modal = document.getElementById('sshModal');
+  if (modal) modal.classList.add('hidden');
+  state.currentSshAgent = null;
+}
+
+function selectSshPreset(cmdKey) {
+  const select = document.getElementById('sshCommandSelect');
+  if (select) {
+    select.value = cmdKey;
+  }
+
+  document.querySelectorAll('.ssh-preset-btn').forEach(btn => {
+    if (btn.getAttribute('data-key') === cmdKey) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+function syncPresetSelection() {
+  const select = document.getElementById('sshCommandSelect');
+  if (!select) return;
+  const currentVal = select.value;
+
+  document.querySelectorAll('.ssh-preset-btn').forEach(btn => {
+    if (btn.getAttribute('data-key') === currentVal) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+async function executeRemoteCommand() {
+  if (!isAdmin()) {
+    alert("Akses ditolak: Hanya role admin yang boleh mengeksekusi perintah remote.");
+    return;
+  }
+
+  if (!state.currentSshAgent || !state.currentSshAgent.id) {
+    alert("Target agent belum dipilih.");
+    return;
+  }
+
+  const select = document.getElementById('sshCommandSelect');
+  const cmdKey = select ? select.value : 'uptime';
+  const outputEl = document.getElementById('sshTerminalOutput');
+  const runBtn = document.getElementById('btnRunSsh');
+
+  const agentId = state.currentSshAgent.id;
+  const agentIp = state.currentSshAgent.ip;
+
+  if (runBtn) {
+    runBtn.disabled = true;
+    runBtn.innerHTML = `<span class="spin-icon">⟳</span> Executing...`;
+  }
+
+  const nowStr = new Date().toLocaleTimeString();
+  if (outputEl) {
+    outputEl.textContent += `\n\n[${nowStr}] ${agentId}@${agentIp}:~$ exec ${cmdKey}\nMenunggu respon dari target VPS via SSH...`;
+    outputEl.scrollTop = outputEl.scrollHeight;
+  }
+
+  try {
+    const res = await authFetch(`/api/v1/agents/${encodeURIComponent(agentId)}/exec`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command_key: cmdKey })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}: Gagal mengeksekusi perintah`);
+    }
+
+    const timeMs = data.execution_time_ms ? `${data.execution_time_ms.toFixed(1)} ms` : '-';
+    const exitCode = data.exit_code !== undefined ? data.exit_code : 0;
+    const outText = data.output || '(No stdout returned)';
+
+    if (outputEl) {
+      outputEl.textContent += `\n${outText}\n[SUCCESS] Selesai dalam ${timeMs} (Exit Code: ${exitCode})`;
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+  } catch (err) {
+    if (outputEl) {
+      outputEl.textContent += `\n[ERROR] ${err.message}\n(Pastikan endpoint backend sudah terpasang dan target VPS dapat dihubungi via SSH)`;
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+  } finally {
+    if (runBtn) {
+      runBtn.disabled = false;
+      runBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        <span>Run Command</span>
+      `;
+    }
+  }
+}
+
+function copyTerminalOutput() {
+  const outputEl = document.getElementById('sshTerminalOutput');
+  if (!outputEl) return;
+  navigator.clipboard.writeText(outputEl.textContent).then(() => {
+    alert('Output terminal berhasil disalin ke clipboard!');
+  }).catch(() => {
+    alert('Gagal menyalin output ke clipboard.');
+  });
+}
+
+function clearTerminalOutput() {
+  const outputEl = document.getElementById('sshTerminalOutput');
+  if (outputEl) {
+    outputEl.textContent = `[CLEARED] Konsol dibersihkan pada ${new Date().toLocaleTimeString()}\n`;
   }
 }
 

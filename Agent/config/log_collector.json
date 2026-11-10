@@ -3,14 +3,45 @@
     "scan_interval": 5,
     "targets": [
         {
-             "app_name": "Nginx Web",
+            "app_name": "Nginx Web",
             "file_path": "/var/log/nginx/*.log",
             "keywords": []
         },
         {
-             "app_name": "SSH Auth",
+            "app_name": "SSH Auth",
             "file_path": "/var/log/auth.log",
             "keywords": []
+        },
+        {
+            "app_name": "Kernel",
+            "file_path": "/var/log/kern.log",
+            "keywords": [
+                "ufw block",
+                "out of memory",
+                "oom-kill",
+                "segfault"
+            ]
+        },
+        {
+            "app_name": "UFW",
+            "file_path": "/var/log/ufw.log",
+            "keywords": []
+        },
+        {
+            "app_name": "Package",
+            "file_path": "/var/log/dpkg.log",
+            "keywords": [
+                " install ",
+                " remove "
+            ]
+        },
+        {
+            "app_name": "Fail2ban",
+            "file_path": "/var/log/fail2ban.log",
+            "keywords": [
+                " ban ",
+                " unban "
+            ]
         }
     ]
 }

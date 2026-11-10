@@ -20,15 +20,17 @@ type MetricCollector struct {
 	AgentName     string
 	ServerUrl     string
 	RamLimitMB    uint64
+	AgentKey      string
 	Client        *http.Client
 	lastLatencyMs float64
 }
 
-func NewMetricCollector(agent, serverUrl string, ramLimit uint64) *MetricCollector {
+func NewMetricCollector(agent, serverUrl string, ramLimit uint64, agentKey string) *MetricCollector {
 	return &MetricCollector{
 		AgentName:  agent,
 		ServerUrl:  serverUrl,
 		RamLimitMB: ramLimit,
+		AgentKey:   agentKey,
 		Client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -110,7 +112,17 @@ func (mc *MetricCollector) Send(status *models.DeviceStatus) error {
 		return err
 	}
 	start := time.Now()
-	resp, err := mc.Client.Post(mc.ServerUrl, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest(http.MethodPost, mc.ServerUrl, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// CenterServer mewajibkan header ini pada /api/v1/agent/* (RequireAgentKey).
+	if mc.AgentKey != "" {
+		req.Header.Set("X-Agent-Key", mc.AgentKey)
+	}
+
+	resp, err := mc.Client.Do(req)
 	if err != nil {
 		return err
 	}

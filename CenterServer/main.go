@@ -148,6 +148,7 @@ func main() {
 	adminOnly.Delete("/agents/:id", h.HandleDeleteAgent)
 	adminOnly.Post("/containment/block", h.HandleBlockIP)
 	adminOnly.Post("/users", authHandler.HandleRegister)
+	adminOnly.Post("/agents/:id/exec", h.HandleRemoteExec)
 
 	port := os.Getenv("PORT")
 	if port == "" {

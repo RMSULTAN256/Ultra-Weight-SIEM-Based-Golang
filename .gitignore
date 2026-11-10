@@ -1,6 +1,10 @@
 # Environment & Secrets
 .env
 *.env
+data/prod-1-only
+*.pem
+*.key
+id_*
 
 # Compiled Binaries (Wajib di-ignore)
 *.exe
@@ -22,6 +26,8 @@ CenterServer/events.ndjson
 # Database SQLite
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 

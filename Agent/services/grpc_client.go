@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 type GRPCClient struct {
@@ -19,7 +20,7 @@ type GRPCClient struct {
 	agentName string
 }
 
-func NewGRPCClient(serverAddr, agentName string) (*GRPCClient, error) {
+func NewGRPCClient(serverAddr, agentName, agentKey string) (*GRPCClient, error) {
 	var creds credentials.TransportCredentials
 
 	if strings.Contains(serverAddr, ":443") || !strings.Contains(serverAddr, "localhost") {
@@ -34,7 +35,13 @@ func NewGRPCClient(serverAddr, agentName string) (*GRPCClient, error) {
 	}
 	client := proto.NewIngestionServiceClient(conn)
 
-	logStream, err := client.StreamLogs(context.Background())
+	ctx := context.Background()
+
+	if agentKey != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-agent-key", agentKey)
+	}
+
+	logStream, err := client.StreamLogs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log stream: %w", err)
 	}

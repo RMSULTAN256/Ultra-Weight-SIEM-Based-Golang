@@ -21,20 +21,27 @@ func main() {
 
 	heartBeatUrl := baseURL + "/api/v1/agent/heartbeat"
 
-	collector := services.NewMetricCollector(agentClient, heartBeatUrl, 0)
+	// Kunci API untuk endpoint /api/v1/agent/* di CenterServer.
+	// Tanpa ini, heartbeat dan fallback log via HTTP akan ditolak (401).
+	agentKey := os.Getenv("AGENT_API_KEY")
+	if agentKey == "" {
+		fmt.Println("[WARN] AGENT_API_KEY kosong: heartbeat & fallback log HTTP akan ditolak (401)")
+	}
+
+	collector := services.NewMetricCollector(agentClient, heartBeatUrl, 0, agentKey)
 	logCfg, err := config.LoadConfig("config/log_collector.json")
 	if err != nil {
 		fmt.Println("Failed to load, logs config not found")
 	}
 
-	logScanner := services.NewLogCollector(baseURL, agentClient)
+	logScanner := services.NewLogCollector(baseURL, agentClient, agentKey)
 
 	grpcAddr := os.Getenv("GRPC_SERVER")
 	if grpcAddr == "" {
 		grpcAddr = "gowaz.vulnstack.xyz:443"
 	}
 
-	grpcClient, err := services.NewGRPCClient(grpcAddr, agentClient)
+	grpcClient, err := services.NewGRPCClient(grpcAddr, agentClient, agentKey)
 	if err != nil {
 		fmt.Printf("[ERROR] Gagal membuat klien gRPC: %v\n", err)
 	} else {
