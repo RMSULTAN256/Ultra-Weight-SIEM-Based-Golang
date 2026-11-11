@@ -82,6 +82,20 @@ function handleLogout() {
   window.location.replace(LOGIN_URL + '?reason=logout');
 }
 
+/** Format waktu lengkap dengan tanggal & bulan (Contoh: "11 Nov 15:23:45") */
+function formatDateTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '-';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = months[d.getMonth()];
+  const hours = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  const secs = String(d.getSeconds()).padStart(2, '0');
+  return `${day} ${month} ${hours}:${mins}:${secs}`;
+}
+
 // 2. Application Global State
 const MAX_BUFFER_CAP = 1000;
 
@@ -1032,7 +1046,7 @@ function renderEventsTable() {
     tbody.innerHTML = `<tr class="placeholder-row"><td colspan="8">${total === 0 ? 'No security events match the criteria.' : 'No events in buffer.'}</td></tr>`;
   } else {
     tbody.innerHTML = pageItems.map(item => {
-      const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '-';
+      const timeStr = formatDateTime(item.timestamp);
       let levelClass = 'badge-level-info';
       if (item.level >= 12) levelClass = 'badge-level-danger';
       else if (item.level >= 7) levelClass = 'badge-level-warn';
@@ -1350,7 +1364,7 @@ function renderOverviewRecentEvents() {
     let rowsHtml = '';
     pageItems.forEach(item => {
       const isExpanded = overviewExpandedRowIds.has(item.id);
-      const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '-';
+      const timeStr = formatDateTime(item.timestamp);
       let levelClass = 'badge-level-info';
       if (item.level >= 12) levelClass = 'badge-level-danger';
       else if (item.level >= 7) levelClass = 'badge-level-warn';
@@ -1676,8 +1690,8 @@ function renderIPTable() {
     ipTableBody.innerHTML = `<tr class="placeholder-row"><td colspan="8">No source IP addresses registered yet.</td></tr>`;
   } else {
     ipTableBody.innerHTML = pageItems.map(r => {
-      const firstTime = r.first_seen ? new Date(r.first_seen).toLocaleTimeString() : '-';
-      const lastTime = r.last_seen ? new Date(r.last_seen).toLocaleTimeString() : '-';
+      const firstTime = formatDateTime(r.first_seen);
+      const lastTime = formatDateTime(r.last_seen);
 
       let threatClass = 'badge-level-info';
       if (r.threat_level === 'Critical') threatClass = 'badge-level-danger';
@@ -1958,7 +1972,7 @@ function renderFleetCards() {
           <span><span class="footer-meta-key">Uptime:</span> ${uptimeStr}</span>
           ${d.agent_mem_mb ? `<span><span class="footer-meta-key">Binary RAM:</span> <strong style="color:var(--color-success);font-weight:600;">${d.agent_mem_mb.toFixed(1)} MB</strong></span>` : ''}
           ${d.latency_ms > 0 ? `<span><span class="footer-meta-key">Ping:</span> <strong style="color:var(--color-info);font-weight:600;">${d.latency_ms.toFixed(1)} ms</strong></span>` : ''}
-          <span><span class="footer-meta-key">Last Seen:</span> ${new Date(item.lastSeen).toLocaleTimeString()}</span>
+          <span><span class="footer-meta-key">Last Seen:</span> ${formatDateTime(item.lastSeen)}</span>
         </div>
       </div>
     `;
@@ -2137,7 +2151,7 @@ async function executeRemoteCommand() {
     runBtn.innerHTML = `<span class="spin-icon">⟳</span> Executing...`;
   }
 
-  const nowStr = new Date().toLocaleTimeString();
+  const nowStr = formatDateTime(new Date());
   if (outputEl) {
     outputEl.textContent += `\n\n[${nowStr}] ${agentId}@${agentIp}:~$ exec ${cmdKey}\nMenunggu respon dari target VPS via SSH...`;
     outputEl.scrollTop = outputEl.scrollHeight;
@@ -2194,7 +2208,7 @@ function copyTerminalOutput() {
 function clearTerminalOutput() {
   const outputEl = document.getElementById('sshTerminalOutput');
   if (outputEl) {
-    outputEl.textContent = `[CLEARED] Konsol dibersihkan pada ${new Date().toLocaleTimeString()}\n`;
+    outputEl.textContent = `[CLEARED] Konsol dibersihkan pada ${formatDateTime(new Date())}\n`;
   }
 }
 
