@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wazuh-Lean | Ultra-Lightweight SIEM SOC Dashboard</title>
-  <link rel="stylesheet" href="/style.css?v=3.5-ssh">
+  <link rel="stylesheet" href="/style.css?v=3.7-catfilter">
 </head>
 <body>
   <!-- ======================================================== -->
@@ -230,8 +230,13 @@
             <!-- Quick Filter Chips -->
             <div class="quick-filter-chips">
               <button class="filter-chip active" data-filter="ALL">All Events</button>
-              <button class="filter-chip" data-filter="NGINX">Web Nginx</button>
-              <button class="filter-chip" data-filter="SSH">SSH Auth</button>
+              <button class="filter-chip" data-filter="UFW"><span class="chip-dot chip-dot-ufw"></span>UFW Firewall</button>
+              <button class="filter-chip chip-danger" data-filter="SPAM"><span class="chip-dot chip-dot-spam"></span>Spam / Attack</button>
+              <button class="filter-chip" data-filter="AUTH"><span class="chip-dot chip-dot-auth"></span>SSH Auth</button>
+              <button class="filter-chip" data-filter="WEB"><span class="chip-dot chip-dot-web"></span>Web Nginx</button>
+              <button class="filter-chip" data-filter="INFO"><span class="chip-dot chip-dot-info"></span>System Info</button>
+              <button class="filter-chip" data-filter="SYSTEM"><span class="chip-dot chip-dot-system"></span>Kernel &amp; Sudo</button>
+              <button class="filter-chip" data-filter="FAIL2BAN"><span class="chip-dot chip-dot-fail2ban"></span>Fail2ban</button>
               <button class="filter-chip chip-warn" data-filter="ERRORS">4xx / 5xx</button>
               <button class="filter-chip chip-danger" data-filter="THREATS">Threats (Lvl &ge; 7)</button>
             </div>
@@ -261,8 +266,8 @@
                   <th width="135">SOURCE IP</th>
                   <th width="110">AGENT</th>
                   <th width="90">LEVEL</th>
-                  <th width="105">HTTP / CODE</th>
-                  <th>EVENT DETAILS</th>
+                  <th width="135">CATEGORY &amp; ACTION</th>
+                  <th>EVENT DETAILS &amp; CAPTURED INFO</th>
                   <th width="130">MITRE</th>
                   <th width="75">INSPECT</th>
                 </tr>
@@ -429,36 +434,60 @@
 
         <!-- Discovery Toolbar -->
         <div class="events-toolbar">
-          <!-- Search box -->
-          <div class="search-box events-search">
-            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input type="text" id="logFilter" placeholder="Search across IP, Agent, Message, Mitre ID...">
-            <button id="clearLogFilterBtn" class="clear-search-btn hidden" title="Clear filter">&times;</button>
-          </div>
-
-          <!-- Severity Filter Pills -->
-          <div class="filter-pills">
-            <button class="pill-btn active" data-severity="ALL">All</button>
-            <button class="pill-btn pill-danger" data-severity="CRITICAL">Critical</button>
-            <button class="pill-btn pill-warning" data-severity="SUSPICIOUS">Warning</button>
-            <button class="pill-btn pill-info" data-severity="INFO">Info</button>
-          </div>
-
-          <!-- Live Pause / Resume -->
-          <div class="toolbar-right-group">
-            <button id="btnToggleLive" class="btn-live active" title="Toggle automatic table update on incoming events">
-              <span class="live-dot-pulse"></span>
-              <span id="liveBtnText">Live Stream</span>
-            </button>
-            <button id="btnRefreshLogs" class="btn-secondary" title="Re-fetch last 1,000 events from server">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          <div class="events-toolbar-top">
+            <!-- Search box -->
+            <div class="search-box events-search">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <span>Reload</span>
-            </button>
+              <input type="text" id="logFilter" placeholder="Search across IP, Agent, Category, Port, User, Action, Message...">
+              <button id="clearLogFilterBtn" class="clear-search-btn hidden" title="Clear filter">&times;</button>
+            </div>
+
+            <!-- Live Pause / Resume & Reload -->
+            <div class="toolbar-right-group">
+              <button id="btnToggleLive" class="btn-live active" title="Toggle automatic table update on incoming events">
+                <span class="live-dot-pulse"></span>
+                <span id="liveBtnText">Live Stream</span>
+              </button>
+              <button id="btnRefreshLogs" class="btn-secondary" title="Re-fetch last 1,000 events from server">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                <span>Reload</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="events-toolbar-bottom">
+            <!-- Category Filter Group -->
+            <div class="filter-group">
+              <span class="filter-group-label">CATEGORY:</span>
+              <div class="category-pills" id="eventsCategoryPills">
+                <button class="pill-btn active" data-category="ALL">All Sources</button>
+                <button class="pill-btn pill-ufw" data-category="UFW"><span class="chip-dot chip-dot-ufw"></span>UFW Firewall</button>
+                <button class="pill-btn pill-spam" data-category="SPAM"><span class="chip-dot chip-dot-spam"></span>Spam / Attack</button>
+                <button class="pill-btn pill-auth" data-category="AUTH"><span class="chip-dot chip-dot-auth"></span>SSH Logins</button>
+                <button class="pill-btn pill-web" data-category="WEB"><span class="chip-dot chip-dot-web"></span>Web Access</button>
+                <button class="pill-btn pill-info" data-category="INFO"><span class="chip-dot chip-dot-info"></span>System Info</button>
+                <button class="pill-btn pill-system" data-category="SYSTEM"><span class="chip-dot chip-dot-system"></span>Kernel &amp; Sudo</button>
+                <button class="pill-btn pill-fail2ban" data-category="FAIL2BAN"><span class="chip-dot chip-dot-fail2ban"></span>Fail2ban</button>
+              </div>
+            </div>
+
+            <div class="filter-sep"></div>
+
+            <!-- Severity Filter Pills -->
+            <div class="filter-group">
+              <span class="filter-group-label">SEVERITY:</span>
+              <div class="filter-pills">
+                <button class="pill-btn active" data-severity="ALL">All</button>
+                <button class="pill-btn pill-danger" data-severity="CRITICAL">Critical</button>
+                <button class="pill-btn pill-warning" data-severity="SUSPICIOUS">Warning</button>
+                <button class="pill-btn pill-info" data-severity="INFO">Info</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -472,14 +501,14 @@
             <table class="wazuh-table">
               <thead>
                 <tr>
-                  <th width="130">TIMESTAMP</th>
-                  <th width="140">SOURCE IP</th>
-                  <th width="130">AGENT</th>
-                  <th width="110">LEVEL</th>
-                  <th width="105">HTTP / CODE</th>
-                  <th>EVENT SIGNATURE / DESCRIPTION</th>
-                  <th width="150">MITRE TECHNIQUE</th>
-                  <th width="85">INSPECT</th>
+                  <th width="125">TIMESTAMP</th>
+                  <th width="135">SOURCE IP</th>
+                  <th width="120">AGENT</th>
+                  <th width="85">LEVEL</th>
+                  <th width="135">CATEGORY &amp; ACTION</th>
+                  <th>EVENT SIGNATURE &amp; CAPTURED INFO</th>
+                  <th width="145">MITRE TECHNIQUE</th>
+                  <th width="80">INSPECT</th>
                 </tr>
               </thead>
               <tbody id="eventsTableBody">
@@ -557,11 +586,13 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <h3>Raw Event Detail (NDJSON)</h3>
+          <h3 id="modalEventTitle">Event Inspector &amp; Capture Breakdown</h3>
         </div>
         <button id="closeModalBtn" class="close-btn" title="Close">&times;</button>
       </div>
       <div class="modal-body">
+        <div id="modalCaptureBreakdown" class="modal-capture-box"></div>
+        <div class="modal-raw-title">RAW EVENT NDJSON PAYLOAD:</div>
         <pre id="modalJsonContent"></pre>
       </div>
       <div class="modal-footer">
@@ -673,6 +704,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=3.5-ssh"></script>
+  <script src="/app.js?v=3.7-catfilter"></script>
 </body>
 </html>

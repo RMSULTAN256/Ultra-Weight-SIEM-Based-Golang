@@ -193,11 +193,20 @@ func (s *GRPCServer) CommandStream(stream proto.IngestionService_CommandStreamSe
 	}()
 
 	ctx := stream.Context()
+	pingTicker := time.NewTicker(25 * time.Second)
+	defer pingTicker.Stop()
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
+			case <-pingTicker.C:
+				_ = stream.Send(&proto.CommandPacket{
+					CommandId:   "PING",
+					Timestamp:   time.Now().Unix(),
+					PayloadJson: []byte(`{"command_key":"ping"}`),
+				})
 			case pkt, ok := <-sess.sendCh:
 				if !ok {
 					return

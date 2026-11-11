@@ -98,6 +98,7 @@ const state = {
     pageSize: 25,
     searchQuery: '',
     severityFilter: 'ALL', // 'ALL' | 'CRITICAL' | 'SUSPICIOUS' | 'INFO'
+    categoryFilter: 'ALL', // 'ALL' | 'UFW' | 'AUTH' | 'WEB' | 'FAIL2BAN' | 'SYSTEM'
     isLivePaused: false,
     pendingNewCount: 0
   },
@@ -195,15 +196,497 @@ if (copyJsonBtn) {
 
 let logIdSeq = 0;
 
-function showJsonModal(data) {
-  modalJsonContent.textContent = JSON.stringify(data, null, 2);
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Port to service mapping for network clarity
+const KNOWN_PORTS = {
+  21: 'FTP',
+  22: 'SSH',
+  23: 'Telnet',
+  25: 'SMTP',
+  53: 'DNS',
+  80: 'HTTP',
+  110: 'POP3',
+  143: 'IMAP',
+  443: 'HTTPS',
+  465: 'SMTPS',
+  587: 'Submission',
+  993: 'IMAPS',
+  995: 'POP3S',
+  1433: 'MSSQL',
+  1521: 'Oracle',
+  3306: 'MySQL',
+  5432: 'Postgres',
+  6379: 'Redis',
+  8000: 'HTTP-Alt',
+  8080: 'HTTP-Proxy',
+  8443: 'HTTPS-Alt',
+  9200: 'Elastic',
+  27017: 'MongoDB'
+};
+
+function parseLogCategoryAndDetails(item) {
+  const service = (item.service || item.program || '').toLowerCase();
+  const eventType = (item.event_type || '').toLowerCase();
+  const status = (item.status || '').toLowerCase();
+  const rawMsg = item.message || item.rule_desc || item.desc || '';
+  const msgLower = rawMsg.toLowerCase();
+
+  let category = 'INFO';
+  let categoryLabel = 'SYSTEM INFO';
+  let categoryLabelShort = 'INFO';
+  let categoryClass = 'badge-cat-info';
+
+  let actionLabel = 'EVENT';
+  let actionClass = 'badge-act-info';
+
+  const captured = {
+    category: 'INFO',
+    action: '',
+    protocol: '',
+    port: item.target_port || null,
+    sourcePort: null,
+    portService: '',
+    user: item.user || null,
+    interface: '',
+    endpoint: item.endpoint || null,
+    method: item.method || null,
+    statusCode: item.status_code || null,
+    jail: '',
+    process: '',
+    reason: '',
+    summaryText: ''
+  };
+
+  const tags = [];
+
+  // 1. UFW / Firewall Packet Drops & Allows
+  const isUfw = service.includes('ufw') ||
+                status.includes('ufw block') ||
+                status.includes('ufw allow') ||
+                msgLower.includes('[ufw ') ||
+                msgLower.includes('ufw block') ||
+                eventType.includes('firewall') ||
+                eventType.includes('ufw');
+
+  if (isUfw) {
+    category = 'UFW';
+    categoryLabel = 'UFW FIREWALL';
+    categoryLabelShort = 'UFW';
+    categoryClass = 'badge-cat-ufw';
+
+    let action = 'BLOCK';
+    if (msgLower.includes('allow') || status.includes('allow')) {
+      action = 'ALLOW';
+      actionClass = 'badge-act-success';
+    } else if (msgLower.includes('audit')) {
+      action = 'AUDIT';
+      actionClass = 'badge-act-info';
+    } else {
+      action = 'BLOCK';
+      actionClass = 'badge-act-danger';
+    }
+    captured.action = action;
+
+    const protoMatch = rawMsg.match(/\bPROTO=([A-Za-z0-9]+)/i);
+    if (protoMatch) captured.protocol = protoMatch[1].toUpperCase();
+
+    const dptMatch = rawMsg.match(/\bDPT=(\d+)/i);
+    if (dptMatch) captured.port = parseInt(dptMatch[1], 10);
+    else if (item.target_port) captured.port = item.target_port;
+
+    const sptMatch = rawMsg.match(/\bSPT=(\d+)/i);
+    if (sptMatch) captured.sourcePort = parseInt(sptMatch[1], 10);
+
+    const inMatch = rawMsg.match(/\bIN=([a-zA-Z0-9_.-]+)/i);
+    if (inMatch) captured.interface = inMatch[1];
+
+    if (captured.port && KNOWN_PORTS[captured.port]) {
+      captured.portService = KNOWN_PORTS[captured.port];
+    }
+
+    if (captured.port) {
+      actionLabel = `${action} ${captured.protocol ? captured.protocol + ':' : ''}${captured.port}`;
+    } else if (captured.protocol) {
+      actionLabel = `${action} ${captured.protocol}`;
+    } else {
+      actionLabel = action;
+    }
+
+    if (captured.port) {
+      tags.push(`<span class="tag-pill tag-pill-port">DPT: ${captured.port}${captured.portService ? ' (' + captured.portService + ')' : ''}</span>`);
+    }
+    if (captured.protocol) {
+      tags.push(`<span class="tag-pill tag-pill-proto">${captured.protocol}</span>`);
+    }
+    if (captured.interface) {
+      tags.push(`<span class="tag-pill tag-pill-iface">IN: ${escapeHtml(captured.interface)}</span>`);
+    }
+    if (captured.sourcePort) {
+      tags.push(`<span class="tag-pill tag-pill-port">SPT: ${captured.sourcePort}</span>`);
+    }
+
+    captured.reason = action === 'BLOCK' ? 'Packet dropped by kernel firewall filter' : 'Packet allowed by firewall rule';
+    const portDesc = captured.port ? `Port ${captured.port}${captured.portService ? ' (' + captured.portService + ')' : ''}` : (captured.protocol || 'packet');
+    captured.summaryText = `UFW ${action} ${captured.protocol || 'packet'} to ${portDesc}${captured.interface ? ' on ' + captured.interface : ''}`;
+
+  // 2. Fail2ban Actions
+  } else if (service.includes('fail2ban') || msgLower.includes('fail2ban.actions') || status.includes(' ban ') || status.includes(' unban ') || msgLower.includes(' ban ') || msgLower.includes(' unban ')) {
+    category = 'FAIL2BAN';
+    categoryLabel = 'FAIL2BAN';
+    categoryLabelShort = 'F2B';
+    categoryClass = 'badge-cat-fail2ban';
+
+    const isUnban = msgLower.includes('unban');
+    const action = isUnban ? 'UNBAN' : 'BAN';
+    captured.action = action;
+    actionClass = isUnban ? 'badge-act-warn' : 'badge-act-danger';
+
+    const jailMatch = rawMsg.match(/\[([a-zA-Z0-9_-]+)\]\s+(?:Ban|Unban)/i);
+    if (jailMatch) captured.jail = jailMatch[1];
+
+    actionLabel = `${action} ${captured.jail ? '[' + captured.jail + ']' : ''}`.trim();
+
+    if (captured.jail) {
+      tags.push(`<span class="tag-pill tag-pill-jail">JAIL: ${escapeHtml(captured.jail)}</span>`);
+    }
+    tags.push(`<span class="tag-pill tag-pill-warn">${action} ACTION</span>`);
+
+    captured.reason = isUnban ? 'Manual or timeout unban' : 'Exceeded authentication failure threshold in jail';
+    captured.summaryText = `Fail2ban ${action} IP in jail [${captured.jail || 'default'}] — ${captured.reason}`;
+
+  // 3. Web Attacks (SQLi, RCE, XSS)
+  } else if (eventType === 'web_attack' || msgLower.includes('union select') || msgLower.includes('eval(') || msgLower.includes('<script') || status.includes('union select') || status.includes('eval(')) {
+    category = 'WEB_ATTACK';
+    categoryLabel = 'WEB ATTACK';
+    categoryLabelShort = 'ATTACK';
+    categoryClass = 'badge-cat-attack';
+
+    let attackType = 'Web Exploit';
+    if (msgLower.includes('union select') || status.includes('union select')) attackType = 'SQL Injection';
+    else if (msgLower.includes('eval(') || status.includes('eval(')) attackType = 'Remote Code Execution';
+    else if (msgLower.includes('<script')) attackType = 'XSS Payload';
+
+    captured.action = 'ATTACK';
+    actionClass = 'badge-act-danger';
+    actionLabel = attackType;
+
+    tags.push(`<span class="tag-pill tag-pill-warn">${escapeHtml(attackType)}</span>`);
+
+    const methodMatch = rawMsg.match(/"(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+([^"\s]+)/i);
+    if (methodMatch) {
+      captured.method = methodMatch[1].toUpperCase();
+      captured.endpoint = methodMatch[2];
+      tags.push(`<span class="tag-pill tag-pill-method">${captured.method}</span>`);
+      tags.push(`<span class="tag-pill tag-pill-uri">${escapeHtml(captured.endpoint)}</span>`);
+    }
+
+    captured.reason = `Malicious pattern detected: ${attackType}`;
+    captured.summaryText = `Web Attack: ${attackType} targeted at application${captured.endpoint ? ' (' + captured.endpoint + ')' : ''}`;
+
+  // 4. Kernel OOM Killer & Segfault
+  } else if (msgLower.includes('out of memory') || msgLower.includes('oom-kill') || msgLower.includes('killed process') || msgLower.includes('segfault')) {
+    category = 'SYSTEM';
+    categoryLabel = 'KERNEL / SYS';
+    categoryLabelShort = 'KERNEL';
+    categoryClass = 'badge-cat-system';
+
+    if (msgLower.includes('out of memory') || msgLower.includes('oom-kill') || msgLower.includes('killed process')) {
+      actionLabel = 'OOM-KILL';
+      actionClass = 'badge-act-danger';
+
+      const procMatch = rawMsg.match(/Kill(?:ed)? process \d+ \(([^)]+)\)/i);
+      if (procMatch) captured.process = procMatch[1];
+      else captured.process = 'system-proc';
+
+      tags.push(`<span class="tag-pill tag-pill-warn">OOM KILLER</span>`);
+      tags.push(`<span class="tag-pill tag-pill-proc">PROC: ${escapeHtml(captured.process)}</span>`);
+      captured.reason = 'Linux kernel terminated process due to memory exhaustion';
+      captured.summaryText = `Kernel Out of Memory: Terminated process ${captured.process}`;
+    } else {
+      actionLabel = 'SEGFAULT';
+      actionClass = 'badge-act-danger';
+      tags.push(`<span class="tag-pill tag-pill-warn">SEGFAULT</span>`);
+      captured.reason = 'Memory segmentation fault in binary execution';
+      captured.summaryText = `Kernel Segfault detected in application execution`;
+    }
+
+  // 5. Sudo Privileged Execution
+  } else if (msgLower.includes('sudo:') || eventType === 'sudo' || (msgLower.includes('command=') && msgLower.includes('pwd='))) {
+    category = 'SYSTEM';
+    categoryLabel = 'SUDO / SYS';
+    categoryLabelShort = 'SUDO';
+    categoryClass = 'badge-cat-system';
+    actionLabel = 'SUDO EXEC';
+    actionClass = 'badge-act-warn';
+
+    const sudoUserMatch = rawMsg.match(/sudo:\s+([a-zA-Z0-9_.-]+)\s*:/i);
+    if (sudoUserMatch) captured.user = sudoUserMatch[1];
+    else if (item.user) captured.user = item.user;
+
+    const cmdMatch = rawMsg.match(/COMMAND=(.+)$/i);
+    if (cmdMatch) captured.process = cmdMatch[1].trim();
+    else if (item.command) captured.process = item.command;
+
+    if (captured.user) tags.push(`<span class="tag-pill tag-pill-user">USER: ${escapeHtml(captured.user)}</span>`);
+    if (captured.process) {
+      const shortCmd = captured.process.length > 25 ? captured.process.slice(0, 22) + '...' : captured.process;
+      tags.push(`<span class="tag-pill tag-pill-proc">CMD: ${escapeHtml(shortCmd)}</span>`);
+    }
+    captured.reason = 'Administrative privilege escalation via sudo';
+    captured.summaryText = `Sudo: User "${captured.user || 'root'}" executed privileged command "${captured.process || 'shell'}"`;
+
+  // 6. Cron, Systemd-logind, PAM Session Management (INFO)
+  } else if (msgLower.includes('cron[') || msgLower.includes('systemd-logind') || msgLower.includes('pam_unix(cron:session)') || msgLower.includes('su(pam_unix)') || msgLower.includes('session closed for user') || msgLower.includes('session opened for user')) {
+    category = 'INFO';
+    categoryLabel = 'SYSTEM INFO';
+    categoryLabelShort = 'INFO';
+    categoryClass = 'badge-cat-info';
+    actionClass = 'badge-act-info';
+
+    const cronUserMatch = rawMsg.match(/user\s+([a-zA-Z0-9_.-]+)/i);
+    if (cronUserMatch) captured.user = cronUserMatch[1];
+
+    if (msgLower.includes('cron[')) {
+      actionLabel = 'CRON RUN';
+      tags.push(`<span class="tag-pill tag-pill-proto">CRON</span>`);
+      if (captured.user) tags.push(`<span class="tag-pill tag-pill-user">USER: ${escapeHtml(captured.user)}</span>`);
+      const isOpened = msgLower.includes('opened');
+      captured.reason = 'Automated scheduled cron task execution';
+      captured.summaryText = `Cron session ${isOpened ? 'opened' : 'closed'} for user "${captured.user || 'root'}"`;
+    } else if (msgLower.includes('systemd-logind')) {
+      actionLabel = 'LOGIND';
+      tags.push(`<span class="tag-pill tag-pill-proto">LOGIND</span>`);
+      captured.reason = 'Systemd user session management';
+      captured.summaryText = rawMsg;
+    } else {
+      actionLabel = 'PAM SESSION';
+      tags.push(`<span class="tag-pill tag-pill-proto">PAM</span>`);
+      if (captured.user) tags.push(`<span class="tag-pill tag-pill-user">USER: ${escapeHtml(captured.user)}</span>`);
+      captured.reason = 'PAM session state update';
+      captured.summaryText = rawMsg;
+    }
+
+  // 7. SSH Auth Spam & Brute Force
+  } else if (eventType === 'auth_failure' || status === 'failed' ||
+             msgLower.includes('failed password') || msgLower.includes('invalid user') ||
+             msgLower.includes('authentication failure') || msgLower.includes('user unknown') ||
+             msgLower.includes('break-in attempt') ||
+             status.includes('failed password') || status.includes('invalid user')) {
+
+    category = 'AUTH_SPAM';
+    categoryLabel = 'SPAM / AUTH';
+    categoryLabelShort = 'SPAM';
+    categoryClass = 'badge-cat-spam';
+    actionClass = 'badge-act-danger';
+
+    const userMatch = rawMsg.match(/(?:for\s+(?:invalid\s+user\s+)?([a-zA-Z0-9_.-]+)\s+from|invalid\s+user\s+([a-zA-Z0-9_.-]+)\s+from|user=([a-zA-Z0-9_.-]+)|user\s+unknown\b)/i);
+    if (userMatch) {
+      captured.user = userMatch[1] || userMatch[2] || userMatch[3] || (msgLower.includes('user unknown') ? 'unknown' : null);
+    }
+    if (!captured.user && item.user) captured.user = item.user;
+
+    const portMatch = rawMsg.match(/\bport\s+(\d+)/i);
+    if (portMatch) captured.sourcePort = parseInt(portMatch[1], 10);
+
+    captured.port = item.target_port || 22;
+    captured.portService = 'SSH';
+
+    if (msgLower.includes('invalid user') || msgLower.includes('user unknown')) {
+      actionLabel = 'INVALID USER';
+      captured.reason = 'Unknown user identity enumeration';
+      tags.push(`<span class="tag-pill tag-pill-warn">INVALID USER</span>`);
+    } else if (msgLower.includes('break-in attempt')) {
+      actionLabel = 'BREAK-IN';
+      captured.reason = 'Reverse DNS mismatch / Break-in attempt';
+      tags.push(`<span class="tag-pill tag-pill-warn">BREAK-IN</span>`);
+    } else {
+      actionLabel = 'BAD PASSWD';
+      captured.reason = 'Incorrect credentials / password spray';
+      tags.push(`<span class="tag-pill tag-pill-warn">BAD PASSWD</span>`);
+    }
+
+    if (captured.user) {
+      tags.push(`<span class="tag-pill tag-pill-user">USER: ${escapeHtml(captured.user)}</span>`);
+    }
+    tags.push(`<span class="tag-pill tag-pill-port">PORT: ${captured.port}</span>`);
+    if (captured.sourcePort) {
+      tags.push(`<span class="tag-pill tag-pill-proto">SRC_PORT: ${captured.sourcePort}</span>`);
+    }
+
+    captured.summaryText = `[Auth Spam] Failed SSH login for "${captured.user || 'root'}" on Port ${captured.port} (${captured.reason})`;
+
+  // 8. Legitimate SSH Authentication
+  } else if (eventType === 'auth_success' || status === 'success' ||
+             msgLower.includes('accepted password') || msgLower.includes('accepted publickey')) {
+
+    category = 'AUTH';
+    categoryLabel = 'SSH AUTH';
+    categoryLabelShort = 'AUTH';
+    categoryClass = 'badge-cat-auth';
+    actionClass = 'badge-act-success';
+
+    const userMatch = rawMsg.match(/for\s+([a-zA-Z0-9_.-]+)\s+from/i);
+    if (userMatch) captured.user = userMatch[1];
+    else if (item.user) captured.user = item.user;
+
+    const portMatch = rawMsg.match(/\bport\s+(\d+)/i);
+    if (portMatch) captured.sourcePort = parseInt(portMatch[1], 10);
+
+    captured.port = item.target_port || 22;
+    captured.portService = 'SSH';
+
+    const isKey = msgLower.includes('publickey');
+    actionLabel = isKey ? 'LOGIN KEY' : 'LOGIN PASS';
+
+    if (captured.user) {
+      tags.push(`<span class="tag-pill tag-pill-user">USER: ${escapeHtml(captured.user)}</span>`);
+    }
+    tags.push(`<span class="tag-pill tag-pill-proto">${isKey ? 'PUBLICKEY' : 'PASSWORD'}</span>`);
+    tags.push(`<span class="tag-pill tag-pill-port">PORT: ${captured.port}</span>`);
+
+    captured.reason = 'Valid credential handshake';
+    captured.summaryText = `SSH login accepted for user "${captured.user || 'root'}" via ${isKey ? 'publickey' : 'password'} on Port ${captured.port}`;
+
+  // 9. SSH Disconnects & Session Closed
+  } else if (msgLower.includes('received disconnect') || msgLower.includes('disconnected from user') || msgLower.includes('connection closed by')) {
+    category = 'INFO';
+    categoryLabel = 'SSH INFO';
+    categoryLabelShort = 'INFO';
+    categoryClass = 'badge-cat-info';
+    actionLabel = 'DISCONNECT';
+    actionClass = 'badge-act-info';
+
+    const discUser = rawMsg.match(/user\s+([a-zA-Z0-9_.-]+)/i);
+    if (discUser) captured.user = discUser[1];
+
+    tags.push(`<span class="tag-pill tag-pill-proto">DISCONNECT</span>`);
+    if (captured.user) tags.push(`<span class="tag-pill tag-pill-user">USER: ${escapeHtml(captured.user)}</span>`);
+    captured.reason = 'Client disconnected SSH session';
+    captured.summaryText = `SSH session disconnected${captured.user ? ' for user ' + captured.user : ''}`;
+
+  // 10. Web Access (Nginx / Apache HTTP)
+  } else if (service.includes('nginx') || service.includes('web') || eventType === 'resource_access' || /"(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+/.test(rawMsg) || item.endpoint || item.method) {
+    category = 'WEB';
+    categoryLabel = 'WEB ACCESS';
+    categoryLabelShort = 'WEB';
+    categoryClass = 'badge-cat-web';
+
+    const methodMatch = rawMsg.match(/"(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+([^"\s]+)/i);
+    if (methodMatch) {
+      captured.method = methodMatch[1].toUpperCase();
+      captured.endpoint = methodMatch[2];
+    }
+    if (!captured.method && item.method) captured.method = item.method.toUpperCase();
+    if (!captured.endpoint && item.endpoint) captured.endpoint = item.endpoint;
+
+    const codeMatch = rawMsg.match(/"\s+(\d{3})\b/);
+    if (codeMatch) captured.statusCode = parseInt(codeMatch[1], 10);
+    else if (item.status_code) captured.statusCode = item.status_code;
+
+    const method = captured.method || 'HTTP';
+    const code = captured.statusCode || 200;
+
+    actionLabel = `${method} ${code}`;
+    if (code >= 500) actionClass = 'badge-act-danger';
+    else if (code >= 400) actionClass = 'badge-act-warn';
+    else actionClass = 'badge-act-success';
+
+    tags.push(`<span class="tag-pill tag-pill-method">${escapeHtml(method)}</span>`);
+    tags.push(`<span class="tag-pill tag-pill-code ${code >= 400 ? 'code-error' : ''}">${code}</span>`);
+    if (captured.endpoint) {
+      tags.push(`<span class="tag-pill tag-pill-uri">${escapeHtml(captured.endpoint)}</span>`);
+    }
+
+    captured.reason = code >= 400 ? `HTTP Client/Server Error (${code})` : 'Successful HTTP response';
+    captured.summaryText = `HTTP ${method} ${captured.endpoint || '/'} — Status ${code}`;
+
+  // 11. Package Management (Dpkg)
+  } else if (service.includes('package') || msgLower.includes('install ') || msgLower.includes('remove ') || msgLower.includes('status installed') || msgLower.includes('dpkg')) {
+    category = 'PACKAGE';
+    categoryLabel = 'PACKAGE DPKG';
+    categoryLabelShort = 'DPKG';
+    categoryClass = 'badge-cat-package';
+
+    const isInstall = msgLower.includes('install');
+    actionLabel = isInstall ? 'INSTALL' : 'REMOVE';
+    actionClass = 'badge-act-info';
+
+    tags.push(`<span class="tag-pill tag-pill-proto">${actionLabel}</span>`);
+    captured.summaryText = `dpkg package manager: ${rawMsg}`;
+
+  // 12. Default Info / Operational
+  } else {
+    category = 'INFO';
+    categoryLabel = 'SYSTEM INFO';
+    categoryLabelShort = 'INFO';
+    categoryClass = 'badge-cat-info';
+
+    actionLabel = item.event_type || 'INFO';
+    actionClass = 'badge-act-info';
+
+    tags.push(`<span class="tag-pill tag-pill-proto">${escapeHtml(actionLabel)}</span>`);
+    captured.summaryText = rawMsg || item.desc || 'System log transaction recorded';
+  }
+
+  return {
+    category,
+    categoryLabel,
+    categoryLabelShort,
+    categoryClass,
+    actionLabel,
+    actionClass,
+    captured,
+    tagsHtml: tags.join(''),
+    summaryText: captured.summaryText
+  };
+}
+
+function showJsonModal(item) {
+  const modalCaptureBox = document.getElementById('modalCaptureBreakdown');
+  if (modalCaptureBox && item.parsed) {
+    const p = item.parsed;
+    modalCaptureBox.innerHTML = `
+      <div class="modal-capture-head">
+        <span class="badge-cat ${p.categoryClass}">${p.categoryLabel}</span>
+        <span class="badge-act ${p.actionClass}">${p.actionLabel}</span>
+        <span class="modal-capture-summary">${escapeHtml(p.summaryText)}</span>
+      </div>
+      <div class="modal-capture-grid">
+        <div class="modal-capture-item"><div class="k">Log Category</div><div class="v">${p.categoryLabel}</div></div>
+        <div class="modal-capture-item"><div class="k">Captured Action</div><div class="v">${p.actionLabel}</div></div>
+        <div class="modal-capture-item"><div class="k">Target Port &amp; Proto</div><div class="v">${p.captured.port ? (p.captured.protocol ? p.captured.protocol + '/' : '') + p.captured.port + (p.captured.portService ? ' (' + p.captured.portService + ')' : '') : (p.captured.protocol || '-')}</div></div>
+        <div class="modal-capture-item"><div class="k">Source / Client Port</div><div class="v">${p.captured.sourcePort || '-'}</div></div>
+        <div class="modal-capture-item"><div class="k">Target User / Identity</div><div class="v">${p.captured.user ? escapeHtml(p.captured.user) : '-'}</div></div>
+        <div class="modal-capture-item"><div class="k">Inbound Interface</div><div class="v">${p.captured.interface ? escapeHtml(p.captured.interface) : '-'}</div></div>
+        <div class="modal-capture-item"><div class="k">Endpoint / Process / CMD</div><div class="v">${p.captured.endpoint || p.captured.process ? escapeHtml(p.captured.endpoint || p.captured.process) : '-'}</div></div>
+        <div class="modal-capture-item"><div class="k">Capture Reason</div><div class="v">${p.captured.reason ? escapeHtml(p.captured.reason) : '-'}</div></div>
+        <div class="modal-capture-item"><div class="k">Source Address</div><div class="v">${item.source_ip}</div></div>
+        <div class="modal-capture-item"><div class="k">Monitored Node</div><div class="v">${item.agent}</div></div>
+        <div class="modal-capture-item"><div class="k">Collector Service</div><div class="v">${escapeHtml(item.raw?.service || '-')}</div></div>
+      </div>
+    `;
+    modalCaptureBox.classList.remove('hidden');
+  } else if (modalCaptureBox) {
+    modalCaptureBox.classList.add('hidden');
+  }
+
+  modalJsonContent.textContent = JSON.stringify(item.raw || item, null, 2);
   jsonModal.classList.remove('hidden');
 }
 
 window.inspectEventById = function(id) {
   const item = state.eventsList.find(e => e.id === id);
-  if (item && item.raw) {
-    showJsonModal(item.raw);
+  if (item) {
+    showJsonModal(item);
   }
 };
 
@@ -211,7 +694,9 @@ window.inspectEventById = function(id) {
 // DATA NORMALIZATION HELPER
 // ==========================================================================
 function normalizeLogItem(item) {
-  const severity = item.severity || (item.event_type === 'auth_failure' ? 7 : 3);
+  const parsed = parseLogCategoryAndDetails(item);
+
+  const severity = item.severity || (parsed.category === 'AUTH_SPAM' ? 7 : parsed.category === 'WEB_ATTACK' ? 10 : 3);
   let levelLabel = "LVL 3 INFO";
   if (severity >= 12) {
     levelLabel = "LVL 12 CRITICAL";
@@ -219,47 +704,14 @@ function normalizeLogItem(item) {
     levelLabel = "LVL 7 WARNING";
   }
 
-  let desc = item.rule_desc || item.message || '';
-  if (!desc) {
-    if (item.event_type) {
-      desc = `Event: ${item.event_type} (${item.service || 'service'}${item.user ? ' user:' + item.user : ''})`;
-    } else {
-      desc = 'HTTP Transaction Recorded';
-    }
-  }
-
   let mitre = item.mitre_id;
   if (!mitre) {
-    if (severity >= 12) mitre = "T1110.001 Brute Force";
+    if (parsed.category === 'AUTH_SPAM') mitre = "T1110 Brute Force";
+    else if (parsed.category === 'WEB_ATTACK') mitre = "T1190 Exploit Public-Facing";
+    else if (parsed.category === 'UFW') mitre = "T1595 Recon Scan";
+    else if (severity >= 12) mitre = "T1110.001 Brute Force";
     else if (severity >= 7) mitre = "T1595 Recon Scan";
     else mitre = "T1082 Telemetry";
-  }
-
-  // Parse HTTP Method & Status Code dari data atau dari baris teks Nginx
-  let statusCode = item.status_code || null;
-  let httpMethod = item.method || null;
-
-  if (item.message) {
-    // Cocokkan pola Nginx: "METHOD /path HTTP/1.x" 200
-    const httpMatch = item.message.match(/"([A-Z]{3,7})\s+[^"]+\s+HTTP\/[0-9.]+"\s+(\d{3})/i);
-    if (httpMatch) {
-      if (!httpMethod) httpMethod = httpMatch[1].toUpperCase();
-      if (!statusCode) statusCode = parseInt(httpMatch[2], 10);
-    }
-  }
-
-  let statusBadgeHtml = '<span class="status-badge status-none">-</span>';
-  if (statusCode) {
-    let cls = 'status-2xx';
-    if (statusCode >= 500) cls = 'status-5xx';
-    else if (statusCode >= 400) cls = 'status-4xx';
-    else if (statusCode >= 300) cls = 'status-3xx';
-
-    const methodHtml = httpMethod ? `<span class="method-tag method-${httpMethod.toLowerCase()}">${httpMethod}</span>` : '';
-    statusBadgeHtml = `<div class="status-badge-wrapper">${methodHtml}<span class="status-badge ${cls}">${statusCode}</span></div>`;
-  } else if (item.status && item.status !== "raw_log" && item.status !== "event_log") {
-    // Hanya tampilkan jika statusnya bukan keyword internal agen ("raw_log")
-    statusBadgeHtml = `<span class="status-badge status-other" title="${escapeHtml(item.status)}">${escapeHtml(item.status)}</span>`;
   }
 
   return {
@@ -269,10 +721,11 @@ function normalizeLogItem(item) {
     agent: item.hostname || "target-node",
     level: severity,
     level_label: levelLabel,
-    status_code: statusCode,
-    status_badge: statusBadgeHtml,
-    desc: desc,
+    status_code: parsed.captured.statusCode,
+    status_badge: `<div class="cat-action-col"><span class="badge-cat ${parsed.categoryClass}">${parsed.categoryLabelShort}</span><span class="badge-act ${parsed.actionClass}">${parsed.actionLabel}</span></div>`,
+    desc: parsed.summaryText || item.rule_desc || item.message || '',
     mitre: mitre,
+    parsed: parsed,
     raw: item
   };
 }
@@ -514,6 +967,23 @@ function updateKPIStats() {
 function getFilteredEvents() {
   let list = state.eventsList;
 
+  // Category Filter
+  const cat = state.eventsPagination.categoryFilter;
+  if (cat && cat !== 'ALL') {
+    list = list.filter(e => {
+      const c = e.parsed?.category || '';
+      if (cat === 'UFW') return c === 'UFW';
+      if (cat === 'SPAM') return c === 'AUTH_SPAM' || c === 'WEB_ATTACK';
+      if (cat === 'AUTH') return c === 'AUTH';
+      if (cat === 'WEB') return c === 'WEB' || c === 'WEB_ATTACK';
+      if (cat === 'INFO') return c === 'INFO' || c === 'PACKAGE';
+      if (cat === 'FAIL2BAN') return c === 'FAIL2BAN';
+      if (cat === 'SYSTEM') return c === 'SYSTEM';
+      if (cat === 'PACKAGE') return c === 'PACKAGE';
+      return true;
+    });
+  }
+
   // Severity Filter
   const sev = state.eventsPagination.severityFilter;
   if (sev === 'CRITICAL') {
@@ -528,11 +998,9 @@ function getFilteredEvents() {
   const q = state.eventsPagination.searchQuery.toLowerCase().trim();
   if (q) {
     list = list.filter(e => {
-      return (e.source_ip && e.source_ip.toLowerCase().includes(q)) ||
-             (e.agent && e.agent.toLowerCase().includes(q)) ||
-             (e.desc && e.desc.toLowerCase().includes(q)) ||
-             (e.mitre && e.mitre.toLowerCase().includes(q)) ||
-             (e.level_label && e.level_label.toLowerCase().includes(q));
+      const p = e.parsed;
+      const targetStr = `${e.source_ip} ${e.agent} ${e.desc} ${e.mitre} ${e.level_label} ${p?.category || ''} ${p?.categoryLabel || ''} ${p?.actionLabel || ''} ${p?.captured?.port || ''} ${p?.captured?.sourcePort || ''} ${p?.captured?.user || ''} ${p?.captured?.endpoint || ''} ${p?.captured?.protocol || ''} ${p?.captured?.interface || ''} ${p?.captured?.process || ''} ${p?.captured?.reason || ''} ${e.raw?.service || ''} ${e.raw?.message || ''}`.toLowerCase();
+      return targetStr.includes(q);
     });
   }
 
@@ -575,8 +1043,22 @@ function renderEventsTable() {
           <td class="ip-cell">${item.source_ip}</td>
           <td class="node-cell">${item.agent}</td>
           <td><span class="badge-level ${levelClass}">${item.level_label}</span></td>
-          <td>${item.status_badge}</td>
-          <td class="desc-cell" title="${escapeHtml(item.desc)}">${escapeHtml(item.desc)}</td>
+          <td>
+            <div class="cat-action-col">
+              <span class="badge-cat ${item.parsed.categoryClass}">${item.parsed.categoryLabelShort}</span>
+              <span class="badge-act ${item.parsed.actionClass}">${item.parsed.actionLabel}</span>
+            </div>
+          </td>
+          <td class="desc-cell-wrap">
+            <div class="event-desc-wrapper">
+              <div class="capture-tags-row">
+                ${item.parsed.tagsHtml}
+              </div>
+              <div class="desc-line" title="${escapeHtml(item.parsed.summaryText || item.desc)}">
+                ${escapeHtml(item.parsed.summaryText || item.desc)}
+              </div>
+            </div>
+          </td>
           <td><span class="mitre-badge">${item.mitre}</span></td>
           <td><button class="btn-action" onclick="inspectEventById(${item.id})">Inspect</button></td>
         </tr>
@@ -755,6 +1237,18 @@ if (clearLogFilterBtn) {
   });
 }
 
+// Security Events Category Pills Listener
+document.querySelectorAll('#eventsCategoryPills .pill-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#eventsCategoryPills .pill-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    state.eventsPagination.categoryFilter = btn.dataset.category || 'ALL';
+    state.eventsPagination.currentPage = 1;
+    renderEventsTable();
+  });
+});
+
 // Severity Pills Listener
 document.querySelectorAll('.filter-pills .pill-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -796,12 +1290,22 @@ function getFilteredOverviewEvents() {
 
   // Filter Type Chip
   const fType = state.overviewPagination.filterType;
-  if (fType === 'NGINX') {
-    list = list.filter(e => (e.raw && e.raw.service === 'Nginx Web') || (e.desc && e.desc.includes('HTTP/')) || e.status_code);
-  } else if (fType === 'SSH') {
-    list = list.filter(e => (e.raw && e.raw.service === 'SSH Auth') || (e.desc && (e.desc.includes('sshd') || e.desc.includes('Invalid user') || e.desc.includes('Failed password'))));
+  if (fType === 'UFW') {
+    list = list.filter(e => e.parsed?.category === 'UFW');
+  } else if (fType === 'SPAM') {
+    list = list.filter(e => e.parsed?.category === 'AUTH_SPAM' || e.parsed?.category === 'WEB_ATTACK');
+  } else if (fType === 'AUTH' || fType === 'SSH') {
+    list = list.filter(e => e.parsed?.category === 'AUTH');
+  } else if (fType === 'WEB' || fType === 'NGINX') {
+    list = list.filter(e => e.parsed?.category === 'WEB' || e.parsed?.category === 'WEB_ATTACK');
+  } else if (fType === 'INFO') {
+    list = list.filter(e => e.parsed?.category === 'INFO' || e.parsed?.category === 'PACKAGE');
+  } else if (fType === 'FAIL2BAN') {
+    list = list.filter(e => e.parsed?.category === 'FAIL2BAN');
+  } else if (fType === 'SYSTEM') {
+    list = list.filter(e => e.parsed?.category === 'SYSTEM');
   } else if (fType === 'ERRORS') {
-    list = list.filter(e => e.status_code >= 400);
+    list = list.filter(e => (e.status_code >= 400) || (e.parsed?.captured?.statusCode >= 400));
   } else if (fType === 'THREATS') {
     list = list.filter(e => e.level >= 7);
   }
@@ -810,7 +1314,8 @@ function getFilteredOverviewEvents() {
   const q = state.overviewPagination.searchQuery.toLowerCase().trim();
   if (q) {
     list = list.filter(e => {
-      const targetStr = `${e.source_ip} ${e.agent} ${e.desc} ${e.mitre} ${e.status_code || ''} ${e.raw?.service || ''} ${e.raw?.method || ''}`.toLowerCase();
+      const p = e.parsed;
+      const targetStr = `${e.source_ip} ${e.agent} ${e.desc} ${e.mitre} ${e.status_code || ''} ${e.raw?.service || ''} ${e.raw?.method || ''} ${p?.category || ''} ${p?.categoryLabel || ''} ${p?.actionLabel || ''} ${p?.captured?.port || ''} ${p?.captured?.sourcePort || ''} ${p?.captured?.user || ''} ${p?.captured?.endpoint || ''} ${p?.captured?.protocol || ''} ${p?.captured?.interface || ''} ${p?.captured?.process || ''} ${p?.captured?.reason || ''} ${e.raw?.message || ''}`.toLowerCase();
       return targetStr.includes(q);
     });
   }
@@ -859,8 +1364,22 @@ function renderOverviewRecentEvents() {
           <td class="ip-cell">${item.source_ip}</td>
           <td class="node-cell">${item.agent}</td>
           <td><span class="badge-level ${levelClass}">${item.level_label}</span></td>
-          <td>${item.status_badge}</td>
-          <td class="desc-cell" title="${escapeHtml(item.desc)}">${escapeHtml(item.desc)}</td>
+          <td>
+            <div class="cat-action-col">
+              <span class="badge-cat ${item.parsed.categoryClass}">${item.parsed.categoryLabelShort}</span>
+              <span class="badge-act ${item.parsed.actionClass}">${item.parsed.actionLabel}</span>
+            </div>
+          </td>
+          <td class="desc-cell-wrap">
+            <div class="event-desc-wrapper">
+              <div class="capture-tags-row">
+                ${item.parsed.tagsHtml}
+              </div>
+              <div class="desc-line" title="${escapeHtml(item.parsed.summaryText || item.desc)}">
+                ${escapeHtml(item.parsed.summaryText || item.desc)}
+              </div>
+            </div>
+          </td>
           <td><span class="mitre-badge">${item.mitre}</span></td>
           <td><button class="btn-action" onclick="event.stopPropagation(); inspectEventById(${item.id})">Inspect</button></td>
         </tr>
@@ -871,15 +1390,25 @@ function renderOverviewRecentEvents() {
           <tr class="log-detail-row">
             <td colspan="9">
               <div class="log-detail-content">
+                <div class="log-detail-header-badge">
+                  <span class="badge-cat ${item.parsed.categoryClass}">${item.parsed.categoryLabel}</span>
+                  <span class="badge-act ${item.parsed.actionClass}">${item.parsed.actionLabel}</span>
+                  <span style="color:var(--text-muted); font-size:11px; margin-left:8px;">${escapeHtml(item.parsed.summaryText)}</span>
+                </div>
                 <div class="log-detail-grid">
+                  <div><span class="detail-k">Category:</span> <span class="detail-v">${item.parsed.categoryLabel}</span></div>
+                  <div><span class="detail-k">Captured Action:</span> <span class="detail-v">${item.parsed.actionLabel}</span></div>
+                  <div><span class="detail-k">Target Port &amp; Proto:</span> <span class="detail-v">${item.parsed.captured.port ? (item.parsed.captured.protocol ? item.parsed.captured.protocol + '/' : '') + item.parsed.captured.port + (item.parsed.captured.portService ? ' (' + item.parsed.captured.portService + ')' : '') : (item.parsed.captured.protocol || '-')}</span></div>
+                  <div><span class="detail-k">Source / Client Port:</span> <span class="detail-v">${item.parsed.captured.sourcePort || '-'}</span></div>
+                  <div><span class="detail-k">Target User / Identity:</span> <span class="detail-v">${item.parsed.captured.user ? escapeHtml(item.parsed.captured.user) : '-'}</span></div>
+                  <div><span class="detail-k">Inbound Interface:</span> <span class="detail-v">${item.parsed.captured.interface ? escapeHtml(item.parsed.captured.interface) : '-'}</span></div>
+                  <div><span class="detail-k">URI / Command / Process:</span> <span class="detail-v">${item.parsed.captured.endpoint || item.parsed.captured.process ? escapeHtml(item.parsed.captured.endpoint || item.parsed.captured.process) : '-'}</span></div>
+                  <div><span class="detail-k">Capture Trigger / Reason:</span> <span class="detail-v">${item.parsed.captured.reason ? escapeHtml(item.parsed.captured.reason) : '-'}</span></div>
+                  <div><span class="detail-k">MITRE Attack:</span> <span class="detail-v">${item.mitre}</span></div>
                   <div><span class="detail-k">Timestamp:</span> <span class="detail-v">${item.timestamp}</span></div>
                   <div><span class="detail-k">Source IP:</span> <span class="detail-v">${item.source_ip}</span></div>
-                  <div><span class="detail-k">Node / Agent:</span> <span class="detail-v">${item.agent}</span></div>
-                  <div><span class="detail-k">Service:</span> <span class="detail-v">${escapeHtml(item.raw?.service || item.raw?.program || '-')}</span></div>
-                  <div><span class="detail-k">Event Type:</span> <span class="detail-v">${escapeHtml(item.raw?.event_type || 'event_log')}</span></div>
-                  <div><span class="detail-k">HTTP Code:</span> <span class="detail-v">${item.status_code || '-'}</span></div>
-                  <div><span class="detail-k">MITRE Attack:</span> <span class="detail-v">${item.mitre}</span></div>
-                  <div><span class="detail-k">Severity:</span> <span class="detail-v">Level ${item.level}</span></div>
+                  <div><span class="detail-k">Monitored Node:</span> <span class="detail-v">${item.agent}</span></div>
+                  <div><span class="detail-k">Collector Service:</span> <span class="detail-v">${escapeHtml(item.raw?.service || '-')}</span></div>
                 </div>
                 <div class="log-detail-raw">
                   <span class="detail-k">Raw Message Payload:</span>
@@ -955,9 +1484,9 @@ if (overviewPageSizeSelect) {
 }
 
 // Overview Quick Filter Chips
-document.querySelectorAll('.filter-chip').forEach(btn => {
+document.querySelectorAll('.quick-filter-chips .filter-chip').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.quick-filter-chips .filter-chip').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     state.overviewPagination.filterType = btn.dataset.filter || 'ALL';
     state.overviewPagination.currentPage = 1;

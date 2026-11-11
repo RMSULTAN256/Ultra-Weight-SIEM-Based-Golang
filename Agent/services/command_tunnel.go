@@ -62,6 +62,15 @@ func StartCommandTunnel(conn *grpc.ClientConn, agentName, agentID, agentKey stri
 					break
 				}
 
+				if cmdPkt.CommandId == "PING" {
+					_ = stream.Send(&proto.CommandResultPacket{
+						CommandId:   "PONG",
+						ExitCode:    0,
+						PayloadJson: []byte(`{"status":"pong"}`),
+					})
+					continue
+				}
+
 				if !VerifyHMAC(agentKey, cmdPkt.PayloadJson, cmdPkt.Timestamp, cmdPkt.Signature) {
 					log.Printf("[SECURITY ALERT] HMAC Signature Mismatch untuk cmd_id=%s! Paket dimanipulasi atau kedaluwarsa.", cmdPkt.CommandId)
 					_ = stream.Send(&proto.CommandResultPacket{
