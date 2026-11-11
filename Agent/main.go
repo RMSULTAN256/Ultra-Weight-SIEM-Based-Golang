@@ -21,8 +21,6 @@ func main() {
 
 	heartBeatUrl := baseURL + "/api/v1/agent/heartbeat"
 
-	// Kunci API untuk endpoint /api/v1/agent/* di CenterServer.
-	// Tanpa ini, heartbeat dan fallback log via HTTP akan ditolak (401).
 	agentKey := os.Getenv("AGENT_API_KEY")
 	if agentKey == "" {
 		fmt.Println("[WARN] AGENT_API_KEY kosong: heartbeat & fallback log HTTP akan ditolak (401)")
@@ -46,6 +44,11 @@ func main() {
 		fmt.Printf("[ERROR] Gagal membuat klien gRPC: %v\n", err)
 	} else {
 		logScanner.SetGRPCClient(grpcClient)
+		agentID := os.Getenv("AGENT_ID")
+		if agentID == "" {
+			agentID = agentClient
+		}
+		services.StartCommandTunnel(grpcClient.GetConn(), agentClient, agentID, agentKey)
 	}
 	if logCfg != nil {
 		scanInterval := logCfg.ScanIntervalSec

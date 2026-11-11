@@ -21,6 +21,142 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CommandPacket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CommandId     string                 `protobuf:"bytes,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Signature     string                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	PayloadJson   []byte                 `protobuf:"bytes,4,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandPacket) Reset() {
+	*x = CommandPacket{}
+	mi := &file_proto_siem_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandPacket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandPacket) ProtoMessage() {}
+
+func (x *CommandPacket) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_siem_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandPacket.ProtoReflect.Descriptor instead.
+func (*CommandPacket) Descriptor() ([]byte, []int) {
+	return file_proto_siem_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *CommandPacket) GetCommandId() string {
+	if x != nil {
+		return x.CommandId
+	}
+	return ""
+}
+
+func (x *CommandPacket) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *CommandPacket) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
+}
+
+func (x *CommandPacket) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
+	}
+	return nil
+}
+
+type CommandResultPacket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CommandId     string                 `protobuf:"bytes,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	ExitCode      int32                  `protobuf:"varint,2,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	Signature     string                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	PayloadJson   []byte                 `protobuf:"bytes,4,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandResultPacket) Reset() {
+	*x = CommandResultPacket{}
+	mi := &file_proto_siem_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandResultPacket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandResultPacket) ProtoMessage() {}
+
+func (x *CommandResultPacket) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_siem_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandResultPacket.ProtoReflect.Descriptor instead.
+func (*CommandResultPacket) Descriptor() ([]byte, []int) {
+	return file_proto_siem_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *CommandResultPacket) GetCommandId() string {
+	if x != nil {
+		return x.CommandId
+	}
+	return ""
+}
+
+func (x *CommandResultPacket) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *CommandResultPacket) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
+}
+
+func (x *CommandResultPacket) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
+	}
+	return nil
+}
+
 type LogPacket struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentName     string                 `protobuf:"bytes,1,opt,name=agent_name,json=agentName,proto3" json:"agent_name,omitempty"`
@@ -31,7 +167,7 @@ type LogPacket struct {
 
 func (x *LogPacket) Reset() {
 	*x = LogPacket{}
-	mi := &file_proto_siem_proto_msgTypes[0]
+	mi := &file_proto_siem_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +179,7 @@ func (x *LogPacket) String() string {
 func (*LogPacket) ProtoMessage() {}
 
 func (x *LogPacket) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_siem_proto_msgTypes[0]
+	mi := &file_proto_siem_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +192,7 @@ func (x *LogPacket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogPacket.ProtoReflect.Descriptor instead.
 func (*LogPacket) Descriptor() ([]byte, []int) {
-	return file_proto_siem_proto_rawDescGZIP(), []int{0}
+	return file_proto_siem_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LogPacket) GetAgentName() string {
@@ -83,7 +219,7 @@ type HeartbeatPacket struct {
 
 func (x *HeartbeatPacket) Reset() {
 	*x = HeartbeatPacket{}
-	mi := &file_proto_siem_proto_msgTypes[1]
+	mi := &file_proto_siem_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -95,7 +231,7 @@ func (x *HeartbeatPacket) String() string {
 func (*HeartbeatPacket) ProtoMessage() {}
 
 func (x *HeartbeatPacket) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_siem_proto_msgTypes[1]
+	mi := &file_proto_siem_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -108,7 +244,7 @@ func (x *HeartbeatPacket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatPacket.ProtoReflect.Descriptor instead.
 func (*HeartbeatPacket) Descriptor() ([]byte, []int) {
-	return file_proto_siem_proto_rawDescGZIP(), []int{1}
+	return file_proto_siem_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *HeartbeatPacket) GetAgentName() string {
@@ -134,7 +270,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_proto_siem_proto_msgTypes[2]
+	mi := &file_proto_siem_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -146,7 +282,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_siem_proto_msgTypes[2]
+	mi := &file_proto_siem_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -159,7 +295,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_proto_siem_proto_rawDescGZIP(), []int{2}
+	return file_proto_siem_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Ack) GetSuccess() bool {
@@ -173,7 +309,19 @@ var File_proto_siem_proto protoreflect.FileDescriptor
 
 const file_proto_siem_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto/siem.proto\x12\x05proto\"M\n" +
+	"\x10proto/siem.proto\x12\x05proto\"\x8d\x01\n" +
+	"\rCommandPacket\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x01 \x01(\tR\tcommandId\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x1c\n" +
+	"\tsignature\x18\x03 \x01(\tR\tsignature\x12!\n" +
+	"\fpayload_json\x18\x04 \x01(\fR\vpayloadJson\"\x92\x01\n" +
+	"\x13CommandResultPacket\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x01 \x01(\tR\tcommandId\x12\x1b\n" +
+	"\texit_code\x18\x02 \x01(\x05R\bexitCode\x12\x1c\n" +
+	"\tsignature\x18\x03 \x01(\tR\tsignature\x12!\n" +
+	"\fpayload_json\x18\x04 \x01(\fR\vpayloadJson\"M\n" +
 	"\tLogPacket\x12\x1d\n" +
 	"\n" +
 	"agent_name\x18\x01 \x01(\tR\tagentName\x12!\n" +
@@ -183,13 +331,14 @@ const file_proto_siem_proto_rawDesc = "" +
 	"agent_name\x18\x01 \x01(\tR\tagentName\x12!\n" +
 	"\fpayload_json\x18\x02 \x01(\fR\vpayloadJson\"\x1f\n" +
 	"\x03Ack\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2u\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\xbc\x01\n" +
 	"\x10IngestionService\x12,\n" +
 	"\n" +
 	"StreamLogs\x12\x10.proto.LogPacket\x1a\n" +
 	".proto.Ack(\x01\x123\n" +
 	"\rSendHeartbeat\x12\x16.proto.HeartbeatPacket\x1a\n" +
-	".proto.AckB\rZ\vAgent/protob\x06proto3"
+	".proto.Ack\x12E\n" +
+	"\rCommandStream\x12\x1a.proto.CommandResultPacket\x1a\x14.proto.CommandPacket(\x010\x01B\rZ\vAgent/protob\x06proto3"
 
 var (
 	file_proto_siem_proto_rawDescOnce sync.Once
@@ -203,19 +352,23 @@ func file_proto_siem_proto_rawDescGZIP() []byte {
 	return file_proto_siem_proto_rawDescData
 }
 
-var file_proto_siem_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_siem_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_siem_proto_goTypes = []any{
-	(*LogPacket)(nil),       // 0: proto.LogPacket
-	(*HeartbeatPacket)(nil), // 1: proto.HeartbeatPacket
-	(*Ack)(nil),             // 2: proto.Ack
+	(*CommandPacket)(nil),       // 0: proto.CommandPacket
+	(*CommandResultPacket)(nil), // 1: proto.CommandResultPacket
+	(*LogPacket)(nil),           // 2: proto.LogPacket
+	(*HeartbeatPacket)(nil),     // 3: proto.HeartbeatPacket
+	(*Ack)(nil),                 // 4: proto.Ack
 }
 var file_proto_siem_proto_depIdxs = []int32{
-	0, // 0: proto.IngestionService.StreamLogs:input_type -> proto.LogPacket
-	1, // 1: proto.IngestionService.SendHeartbeat:input_type -> proto.HeartbeatPacket
-	2, // 2: proto.IngestionService.StreamLogs:output_type -> proto.Ack
-	2, // 3: proto.IngestionService.SendHeartbeat:output_type -> proto.Ack
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	2, // 0: proto.IngestionService.StreamLogs:input_type -> proto.LogPacket
+	3, // 1: proto.IngestionService.SendHeartbeat:input_type -> proto.HeartbeatPacket
+	1, // 2: proto.IngestionService.CommandStream:input_type -> proto.CommandResultPacket
+	4, // 3: proto.IngestionService.StreamLogs:output_type -> proto.Ack
+	4, // 4: proto.IngestionService.SendHeartbeat:output_type -> proto.Ack
+	0, // 5: proto.IngestionService.CommandStream:output_type -> proto.CommandPacket
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -232,7 +385,7 @@ func file_proto_siem_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_siem_proto_rawDesc), len(file_proto_siem_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

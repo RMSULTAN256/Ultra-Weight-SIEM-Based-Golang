@@ -53,3 +53,7 @@ func NewGRPCClient(serverAddr, agentName, agentKey string) (*GRPCClient, error) 
 		agentName: agentName,
 	}, nil
 }
+
+func (c *GRPCClient) GetConn() *grpc.ClientConn {
+	return c.conn
+}

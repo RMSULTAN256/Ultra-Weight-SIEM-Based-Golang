@@ -3,6 +3,20 @@ syntax = "proto3";
 package proto;
 option go_package = "server3/proto";
 
+message CommandPacket {
+    string  command_id   = 1;
+    int64   timestamp     = 2;
+    string  signature    = 3;
+    bytes   payload_json  = 4;
+}
+
+message CommandResultPacket {
+    string  command_id      = 1;
+    int32   exit_code       = 2;
+    string  signature       = 3;
+    bytes   payload_json    = 4;
+}
+
 message LogPacket {
     string agent_name = 1;
     bytes payload_json = 2;
@@ -20,4 +34,5 @@ message Ack {
 service IngestionService {
     rpc StreamLogs (stream LogPacket) returns (Ack);
     rpc SendHeartbeat (HeartbeatPacket) returns (Ack);
+    rpc CommandStream (stream CommandResultPacket) returns (stream CommandPacket);
 }

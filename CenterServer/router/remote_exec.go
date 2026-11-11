@@ -356,12 +356,22 @@ func (sc *HandleService) HandleRemoteExec(c fiber.Ctx) error {
 	// 3) Audit trail: siapa mengeksekusi apa, di host mana, hasilnya bagaimana.
 	sc.auditRemoteExec(c, node, agentID, req.CommandKey, rawCmd, exitCode, execErr, elapsedMs)
 
+	if execErr != nil && exitCode == -1 && ActiveGRPCServer != nil {
+		log.Printf("[remote-exec] SSH ke %s gagal (%v). Mencoba fallback via Reverse gRPC Tunnel...", node.Addr, execErr)
+		if gOut, gCode, gErr := ActiveGRPCServer.ExecuteCommandViaGRPC(agentID, req.CommandKey, 10*time.Second); gErr == nil {
+			output = gOut + "\n[FALLBACK] Berhasil dieksekusi melalui Reverse gRPC Tunnel (SSH Refused Bypass)"
+			exitCode = gCode
+			execErr = nil
+		} else {
+			log.Printf("[remote-exec] Fallback gRPC ke %s juga gagal: %v", agentID, gErr)
+		}
+	}
+
 	if execErr != nil && exitCode == -1 {
-		// Detail (path kunci, IP internal) hanya masuk log server, tidak ke client.
-		log.Printf("[ssh-exec] agent=%s node=%s user=%s cmd=%q gagal: %v",
-			agentID, node.Addr, node.User, req.CommandKey, execErr)
+		log.Printf("[remote-exec] agent=%s node=%s cmd=%q gagal total (SSH & gRPC): %v",
+			agentID, node.Addr, req.CommandKey, execErr)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":             "Eksekusi SSH gagal. Detail sudah dicatat pada log server.",
+			"error":             "Eksekusi remote gagal (Jalur SSH refused dan Reverse gRPC tunnel tidak merespon).",
 			"execution_time_ms": elapsedMs,
 		})
 	}

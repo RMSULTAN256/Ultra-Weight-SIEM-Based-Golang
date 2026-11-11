@@ -8,7 +8,6 @@ package proto
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -22,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	IngestionService_StreamLogs_FullMethodName    = "/proto.IngestionService/StreamLogs"
 	IngestionService_SendHeartbeat_FullMethodName = "/proto.IngestionService/SendHeartbeat"
+	IngestionService_CommandStream_FullMethodName = "/proto.IngestionService/CommandStream"
 )
 
 // IngestionServiceClient is the client API for IngestionService service.
@@ -30,6 +30,7 @@ const (
 type IngestionServiceClient interface {
 	StreamLogs(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LogPacket, Ack], error)
 	SendHeartbeat(ctx context.Context, in *HeartbeatPacket, opts ...grpc.CallOption) (*Ack, error)
+	CommandStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CommandResultPacket, CommandPacket], error)
 }
 
 type ingestionServiceClient struct {
@@ -63,12 +64,26 @@ func (c *ingestionServiceClient) SendHeartbeat(ctx context.Context, in *Heartbea
 	return out, nil
 }
 
+func (c *ingestionServiceClient) CommandStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CommandResultPacket, CommandPacket], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &IngestionService_ServiceDesc.Streams[1], IngestionService_CommandStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[CommandResultPacket, CommandPacket]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type IngestionService_CommandStreamClient = grpc.BidiStreamingClient[CommandResultPacket, CommandPacket]
+
 // IngestionServiceServer is the server API for IngestionService service.
 // All implementations must embed UnimplementedIngestionServiceServer
 // for forward compatibility.
 type IngestionServiceServer interface {
 	StreamLogs(grpc.ClientStreamingServer[LogPacket, Ack]) error
 	SendHeartbeat(context.Context, *HeartbeatPacket) (*Ack, error)
+	CommandStream(grpc.BidiStreamingServer[CommandResultPacket, CommandPacket]) error
 	mustEmbedUnimplementedIngestionServiceServer()
 }
 
@@ -84,6 +99,9 @@ func (UnimplementedIngestionServiceServer) StreamLogs(grpc.ClientStreamingServer
 }
 func (UnimplementedIngestionServiceServer) SendHeartbeat(context.Context, *HeartbeatPacket) (*Ack, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendHeartbeat not implemented")
+}
+func (UnimplementedIngestionServiceServer) CommandStream(grpc.BidiStreamingServer[CommandResultPacket, CommandPacket]) error {
+	return status.Error(codes.Unimplemented, "method CommandStream not implemented")
 }
 func (UnimplementedIngestionServiceServer) mustEmbedUnimplementedIngestionServiceServer() {}
 func (UnimplementedIngestionServiceServer) testEmbeddedByValue()                          {}
@@ -131,6 +149,13 @@ func _IngestionService_SendHeartbeat_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IngestionService_CommandStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(IngestionServiceServer).CommandStream(&grpc.GenericServerStream[CommandResultPacket, CommandPacket]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type IngestionService_CommandStreamServer = grpc.BidiStreamingServer[CommandResultPacket, CommandPacket]
+
 // IngestionService_ServiceDesc is the grpc.ServiceDesc for IngestionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -147,6 +172,12 @@ var IngestionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamLogs",
 			Handler:       _IngestionService_StreamLogs_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "CommandStream",
+			Handler:       _IngestionService_CommandStream_Handler,
+			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
