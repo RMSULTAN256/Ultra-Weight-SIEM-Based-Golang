@@ -43,13 +43,13 @@ type NodeSSHConfig struct {
 var NodeSSHMap = map[string]NodeSSHConfig{
 	"ubuntu": {
 		AgentID:     "ubuntu",
-		Aliases:     splitAliases(envOr("SSH_NODE1_ALIASES", "ubuntu-31.56.56.50,31.56.56.50")),
+		Aliases:     splitAliases(envOr("SSH_NODE1_ALIASES", "ubuntu-1,ubuntu-31.56.56.50,31.56.56.50")),
 		Addr:        envOr("SSH_NODE1_ADDR", "31.56.56.50:30061"),
 		User:        envOr("SSH_NODE1_USER", "root"),
 		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
 		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
 		HostKeyPin:  os.Getenv("SSH_NODE1_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE1_SERVICE", "AgentgGo"),
+		ServiceName: envOr("SSH_NODE1_SERVICE", "AgentGo"),
 	},
 	"ubuntu-2": {
 		AgentID:     "ubuntu-2",
@@ -85,8 +85,6 @@ var (
 var nodeIndex = buildNodeIndex()
 
 func buildNodeIndex() map[string]NodeSSHConfig {
-	// Urutan iterasi map di Go acak, jadi key disortir dulu. Dengan begitu,
-	// kalau ada ID kembar, pemenangnya selalu sama (bukan random per request).
 	keys := make([]string, 0, len(NodeSSHMap))
 	for k := range NodeSSHMap {
 		keys = append(keys, k)
@@ -154,8 +152,6 @@ func normalizeNodeID(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
-// ResolveNode memetakan agent ID dari heartbeat ke konfigurasi SSH.
-// Exact match saja: tanpa strings.Contains, tanpa iterasi map saat lookup.
 func ResolveNode(agentID string) (NodeSSHConfig, error) {
 	id := normalizeNodeID(agentID)
 	if id == "" {
@@ -167,9 +163,6 @@ func ResolveNode(agentID string) (NodeSSHConfig, error) {
 	return NodeSSHConfig{}, fmt.Errorf("%w: %q (daftarkan di NodeSSHMap/Aliases atau SSH_NODE*_ALIASES)", errNodeNotFound, id)
 }
 
-// BuildCommand menyusun perintah dari node yang SUDAH di-resolve.
-// Fungsi ini murni (tidak menyentuh NodeSSHMap), jadi mustahil konek ke host A
-// dengan nama service milik host B.
 func BuildCommand(node NodeSSHConfig, cmdKey string) (string, error) {
 	key := strings.TrimSpace(cmdKey)
 	if key == "" {
@@ -327,6 +320,22 @@ func (sc *HandleService) HandleRemoteExec(c fiber.Ctx) error {
 
 	// 1) Resolusi node SEKALI, exact match.
 	node, err := ResolveNode(agentID)
+	if err != nil && sc.siemService != nil {
+		for _, ag := range sc.siemService.GetAgents() {
+			if strings.EqualFold(ag.AgentID, agentID) {
+				if n, err2 := ResolveNode(ag.SourceIP); err2 == nil {
+					node = n
+					err = nil
+					break
+				}
+				if n, err2 := ResolveNode(ag.Hostname); err2 == nil {
+					node = n
+					err = nil
+					break
+				}
+			}
+		}
+	}
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
 	}
