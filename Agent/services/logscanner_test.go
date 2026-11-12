@@ -176,9 +176,9 @@ func TestHandleLineKlasifikasiRule(t *testing.T) {
 func TestHandleLineKeywordTarget(t *testing.T) {
 	srv, sink := newLogSink(t)
 	lc := NewLogCollector(srv.URL, "agent-uji", "")
-	target := models.TargetConfig{AppName: "kernel", Keywords: []string{"OOM-Killer"}}
+	target := models.TargetConfig{AppName: "backup", Keywords: []string{"Backup-Completed"}}
 
-	if err := lc.handleLine("kernel: invoked oom-killer: gfp_mask=0x0", target); err != nil {
+	if err := lc.handleLine("cronjob: daily backup-completed successfully", target); err != nil {
 		t.Fatalf("handleLine gagal: %v", err)
 	}
 
@@ -186,8 +186,8 @@ func TestHandleLineKeywordTarget(t *testing.T) {
 	if len(logs) != 1 {
 		t.Fatalf("harus mengirim 1 log, dapat %d", len(logs))
 	}
-	if logs[0].Status != "OOM-Killer" {
-		t.Errorf("Status dari keywords target: dapat %q, mau %q", logs[0].Status, "OOM-Killer")
+	if logs[0].Status != "Backup-Completed" {
+		t.Errorf("Status dari keywords target: dapat %q, mau %q", logs[0].Status, "Backup-Completed")
 	}
 	if logs[0].EventType != "event_log" || logs[0].Severity != 1 {
 		t.Errorf("keyword target tidak boleh mengubah event/severity: %+v", logs[0])

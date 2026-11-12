@@ -47,8 +47,23 @@ var rules = []struct {
 }{
 	{"union select", "web_attack", 10},
 	{"eval(", "web_attack", 10},
+	{"/etc/passwd", "web_attack", 10},
+	{"<script", "web_attack", 10},
+	{"cmd.exe", "web_attack", 10},
+	{"/bin/sh", "web_attack", 10},
+
 	{"failed password", "auth_failure", 6},
 	{"invalid user", "auth_failure", 6},
+	{"authentication failure", "auth_failure", 6},
+
+	{"ufw block", "port_scan", 5},
+	{"connection refused", "port_scan", 4},
+
+	{"sudo:", "privilege_activity", 5},
+	{"pam_unix(sudo:session): session opened", "privilege_activity", 5},
+
+	{"oom-killer", "system_error", 8},
+	{"segfault", "system_error", 8},
 }
 
 func NewLogCollector(serverUrl, agentName, agentKey string) *LogCollector {

@@ -132,3 +132,58 @@ func TestSIEMService_AgentAndIPTracking(t *testing.T) {
 		t.Errorf("Expected status 'Monitored', got '%s'", rec2.Status)
 	}
 }
+
+func TestSIEMService_SlidingWindowCorrelation(t *testing.T) {
+	svc := NewSIEMService()
+	attackerIP := "198.51.100.55"
+
+	// 1. Kirim 4 failed password (di bawah threshold 5)
+	for i := 1; i <= 4; i++ {
+		logIn := models.SecurityLog{
+			Timestamp: time.Now(),
+			Hostname:  "test-agent",
+			EventType: "auth_failure",
+			Severity:  6,
+			SourceIP:  attackerIP,
+			Message:   fmt.Sprintf("Failed password attempt #%d", i),
+		}
+		res := svc.CorrelateLog(logIn)
+		if res.Severity != 6 {
+			t.Fatalf("Percobaan #%d belum boleh eskalasi: dapat sev %d, mau 6", i, res.Severity)
+		}
+	}
+
+	// 2. Kirim percobaan ke-5 -> Wajib eskalasi ke Critical (12) & MITRE T1110
+	log5 := models.SecurityLog{
+		Timestamp: time.Now(),
+		Hostname:  "test-agent",
+		EventType: "auth_failure",
+		Severity:  6,
+		SourceIP:  attackerIP,
+		Message:   "Failed password attempt #5",
+	}
+	res5 := svc.CorrelateLog(log5)
+	if res5.Severity != 12 {
+		t.Fatalf("Percobaan #5 harus eskalasi ke 12: dapat sev %d", res5.Severity)
+	}
+	if res5.RuleID != "RULE-SSH-BRUTEFORCE" {
+		t.Errorf("RuleID: dapat %q, mau RULE-SSH-BRUTEFORCE", res5.RuleID)
+	}
+	if res5.MitreID != "T1110.001 Brute Force" {
+		t.Errorf("MitreID: dapat %q, mau T1110.001 Brute Force", res5.MitreID)
+	}
+
+	// 3. IP lain yang bersih tidak boleh terkena imbas korelasi IP penyerang
+	cleanIPLog := models.SecurityLog{
+		Timestamp: time.Now(),
+		Hostname:  "test-agent",
+		EventType: "auth_failure",
+		Severity:  6,
+		SourceIP:  "203.0.113.88",
+		Message:   "Salah ketik password sekali",
+	}
+	resClean := svc.CorrelateLog(cleanIPLog)
+	if resClean.Severity != 6 {
+		t.Errorf("IP bersih tidak boleh dieskalasi: dapat %d", resClean.Severity)
+	}
+}

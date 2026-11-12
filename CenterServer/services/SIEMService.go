@@ -15,6 +15,46 @@ import (
 
 const MaxLogsInMemory = 1000
 
+type correlationRule struct {
+	id          string
+	eventType   string
+	window      time.Duration
+	threshold   int
+	targetSev   int
+	mitreID     string
+	description string
+}
+
+var defaultCorrelationRules = []correlationRule{
+	{
+		id:          "RULE-SSH-BRUTEFORCE",
+		eventType:   "auth_failure",
+		window:      60 * time.Second,
+		threshold:   5,
+		targetSev:   12, // Critical
+		mitreID:     "T1110.001 Brute Force",
+		description: "SSH Brute Force Attack Threshold Exceeded",
+	},
+	{
+		id:          "RULE-PORT-SCAN",
+		eventType:   "port_scan",
+		window:      30 * time.Second,
+		threshold:   5,
+		targetSev:   10, // High / Suspicious
+		mitreID:     "T1595 Recon Scan",
+		description: "Mass Port Scanning Activity Blocked by UFW",
+	},
+	{
+		id:          "RULE-WEB-BURST",
+		eventType:   "web_attack",
+		window:      60 * time.Second,
+		threshold:   3,
+		targetSev:   13, // Critical
+		mitreID:     "T1190 Exploit Public-Facing",
+		description: "Multiple Web Application Exploitation Attempts",
+	},
+}
+
 type SIEMService struct {
 	clientsMu sync.Mutex
 	clients   map[chan string]bool
@@ -28,15 +68,19 @@ type SIEMService struct {
 	logsMu sync.RWMutex
 	logs   []models.SecurityLog
 
+	windowMu      sync.RWMutex
+	slidingWIndow map[string][]time.Time
+
 	totalLogsCount uint64
 }
 
 func NewSIEMService() *SIEMService {
 	svc := &SIEMService{
-		clients:   make(map[chan string]bool),
-		ipRecords: make(map[string]*models.IPTrafficRecord),
-		agents:    make(map[string]*models.DeviceStatus),
-		logs:      make([]models.SecurityLog, 0, MaxLogsInMemory),
+		clients:       make(map[chan string]bool),
+		ipRecords:     make(map[string]*models.IPTrafficRecord),
+		agents:        make(map[string]*models.DeviceStatus),
+		logs:          make([]models.SecurityLog, 0, MaxLogsInMemory),
+		slidingWIndow: make(map[string][]time.Time),
 	}
 	svc.loadInitialData()
 	return svc
@@ -393,4 +437,46 @@ func isWhiteListedIP(ipStr string) bool {
 	}
 
 	return ip.IsLoopback() || ip.IsPrivate()
+}
+
+func (s *SIEMService) CorrelateLog(secLog models.SecurityLog) models.SecurityLog {
+	if secLog.SourceIP == "" || secLog.SourceIP == "127.0.0.1" {
+		return secLog
+	}
+
+	now := time.Now()
+	s.windowMu.Lock()
+	defer s.windowMu.Unlock()
+
+	for _, rule := range defaultCorrelationRules {
+		if rule.eventType != secLog.EventType {
+			continue
+		}
+
+		key := fmt.Sprintf("%s:%s", rule.id, secLog.SourceIP)
+		timestamps := s.slidingWIndow[key]
+
+		cutoff := now.Add(-rule.window)
+		validIdx := len(timestamps)
+		for i, t := range timestamps {
+			if t.After(cutoff) {
+				validIdx = i
+				break
+			}
+		}
+		timestamps = timestamps[validIdx:]
+
+		timestamps = append(timestamps, now)
+		s.slidingWIndow[key] = timestamps
+
+		if len(timestamps) >= rule.threshold {
+			secLog.Severity = rule.targetSev
+			secLog.RuleID = rule.id
+			secLog.RuleDesc = fmt.Sprintf("%s (%d events in %v)", rule.description, len(timestamps), rule.window)
+			secLog.MitreID = rule.mitreID
+			secLog.Status = "ESCALATED_ALERT"
+			break
+		}
+	}
+	return secLog
 }

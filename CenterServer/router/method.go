@@ -145,6 +145,8 @@ func (sc *HandleService) HandleIncomingLog(c fiber.Ctx) error {
 		}
 	}
 
+	secLog = sc.siemService.CorrelateLog(secLog)
+
 	threat := "Normal"
 	if secLog.Severity >= 12 {
 		threat = "Critical"

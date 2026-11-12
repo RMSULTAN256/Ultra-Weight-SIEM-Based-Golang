@@ -90,6 +90,8 @@ func (s *GRPCServer) StreamLogs(stream proto.IngestionService_StreamLogsServer) 
 			secLog.Severity = 3
 		}
 
+		secLog = s.siemService.CorrelateLog(secLog)
+
 		threat := "Normal"
 		if secLog.Severity >= 12 {
 			threat = "Critical"
