@@ -54,7 +54,6 @@ func NewDBService(dbPath string) (*DBService, error) {
 		}
 		if hash, err := auth.HashPassword(defaultPass); err == nil {
 			db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')", defaultUser, string(hash))
-			fmt.Printf("[AUTH SEED] Akun default dibuat: Username: %s | Password: %s (Role: admin)\n", defaultUser, defaultPass)
 		}
 	}
 

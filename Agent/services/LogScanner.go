@@ -18,12 +18,15 @@ import (
 	"github.com/bytedance/sonic"
 )
 
+const InMemoryQueueCapacity = 1000
+
 type LogCollector struct {
 	ServerUrl, AgentName, AgentKey string
 	Client                         *http.Client
 	GRPCClient                     *GRPCClient
 	fileOffsets                    map[string]int64
 	state                          map[string]fileState
+	bufferQueue                    chan models.SecurityLog
 }
 
 type fileState struct {
@@ -49,15 +52,18 @@ var rules = []struct {
 }
 
 func NewLogCollector(serverUrl, agentName, agentKey string) *LogCollector {
-	return &LogCollector{
+	lc := &LogCollector{
 		ServerUrl: serverUrl,
 		AgentName: agentName,
 		AgentKey:  agentKey,
 		Client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		state: make(map[string]fileState),
+		state:       make(map[string]fileState),
+		bufferQueue: make(chan models.SecurityLog, InMemoryQueueCapacity),
 	}
+	go lc.startQueueWorker()
+	return lc
 }
 
 func (lg *LogCollector) ScanTarget(target models.TargetConfig) {
@@ -157,7 +163,12 @@ func (ls *LogCollector) handleLine(rawLine string, target models.TargetConfig) e
 		Status:    status,
 		Service:   target.AppName,
 	}
-	return ls.sendLogToCenter(secLog)
+	select {
+	case ls.bufferQueue <- secLog:
+		return nil
+	default:
+		return fmt.Errorf("in-memory ring buffer penuh (kapasitas %d)", InMemoryQueueCapacity)
+	}
 }
 
 func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
@@ -195,4 +206,19 @@ func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
 }
 func (ls *LogCollector) SetGRPCClient(client *GRPCClient) {
 	ls.GRPCClient = client
+}
+
+func (ls *LogCollector) startQueueWorker() {
+	for secLog := range ls.bufferQueue {
+		if err := ls.sendLogToCenter(secLog); err != nil {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+}
+
+func (ls *LogCollector) GetQueueLen() int {
+	if ls.bufferQueue == nil {
+		return 0
+	}
+	return len(ls.bufferQueue)
 }
