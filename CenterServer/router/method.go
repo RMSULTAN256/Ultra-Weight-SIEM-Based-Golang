@@ -2,9 +2,11 @@ package router
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"server3/models"
 	"server3/services"
@@ -267,6 +269,56 @@ func (sc *HandleService) HandleStream(c fiber.Ctx) error {
 	})
 }
 
+func isSafeProbeURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("format URL tidak valid: %w", err)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("skema %q tidak diizinkan, hanya http dan https", u.Scheme)
+	}
+
+	hostname := strings.ToLower(u.Hostname())
+	if hostname == "" {
+		return errors.New("hostname URL kosong")
+	}
+
+	// Blokir host lokal, cloud metadata, dan service internal container
+	blockedHosts := map[string]bool{
+		"localhost":       true,
+		"127.0.0.1":       true,
+		"::1":             true,
+		"169.254.169.254": true,
+		"metadata":        true,
+		"center-siem":     true,
+		"local-jenkins":   true,
+		"jte_mysql":       true,
+		"jte_nginx":       true,
+		"jte_app":         true,
+		"jte_phpmyadmin":  true,
+		"web-nginx":       true,
+		"tunnel-cf":       true,
+	}
+	if blockedHosts[hostname] {
+		return fmt.Errorf("akses ke host internal %q diblokir oleh kebijakan keamanan (SSRF Protection)", hostname)
+	}
+
+	// Resolve alamat IP dan pastikan bukan loopback / private IP / link-local
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		return fmt.Errorf("gagal me-resolve host %q: %w", hostname, err)
+	}
+
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("akses ke alamat IP internal %s diblokir oleh kebijakan keamanan (SSRF Protection)", ip.String())
+		}
+	}
+
+	return nil
+}
+
 func (sc *HandleService) HandleProbe(c fiber.Ctx) error {
 	type ProbeReq struct {
 		URL string `json:"url"`
@@ -274,12 +326,22 @@ func (sc *HandleService) HandleProbe(c fiber.Ctx) error {
 
 	var req ProbeReq
 
-	if err := sonic.Unmarshal(c.Body(), &req); err != nil || req.URL == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "URL target wajin diisi [error di handleProbe]"})
+	if err := sonic.Unmarshal(c.Body(), &req); err != nil || strings.TrimSpace(req.URL) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "URL target wajib diisi"})
+	}
+
+	if err := isSafeProbeURL(req.URL); err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error":  err.Error(),
+			"status": "blocked_by_security_policy",
+		})
 	}
 
 	client := &http.Client{
 		Timeout: 3 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	start := time.Now()

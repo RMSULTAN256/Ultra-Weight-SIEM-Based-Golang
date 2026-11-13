@@ -62,6 +62,15 @@ var defaultCorrelationRules = []correlationRule{
 		mitreID:     "T1110.001 Brute Force",
 		description: "Database Authentication Brute Force Detected",
 	},
+	{
+		id:          "RULE-DB-BRUTEFORCE",
+		eventType:   "db_auth_failure",
+		window:      60 * time.Second,
+		threshold:   5,
+		targetSev:   12, // Critical
+		mitreID:     "T1110.001 Brute Force",
+		description: "Database Authentication Brute Force Detected",
+	},
 }
 
 type SIEMService struct {
@@ -78,7 +87,7 @@ type SIEMService struct {
 	logs   []models.SecurityLog
 
 	windowMu      sync.RWMutex
-	slidingWIndow map[string][]time.Time
+	slidingWindow map[string][]time.Time
 
 	totalLogsCount uint64
 }
@@ -89,7 +98,7 @@ func NewSIEMService() *SIEMService {
 		ipRecords:     make(map[string]*models.IPTrafficRecord),
 		agents:        make(map[string]*models.DeviceStatus),
 		logs:          make([]models.SecurityLog, 0, MaxLogsInMemory),
-		slidingWIndow: make(map[string][]time.Time),
+		slidingWindow: make(map[string][]time.Time),
 	}
 	svc.loadInitialData()
 	return svc
@@ -398,12 +407,9 @@ func (s *SIEMService) ToggleBlockIP(ip string) (*models.IPTrafficRecord, bool) {
 		return nil, false
 	}
 
-	// if isWhiteListedIP(ip) {
-	// 	// rec.Status = "Whitelisted"
-	// 	// copyRec := *rec
-	// 	// return &copyRec, false
-	// 	return nil, false
-	// }
+	if isWhiteListedIP(ip) {
+		return rec, false
+	}
 
 	if rec.Status == "Blocked (iptables)" {
 		rec.Status = "Monitored"
@@ -445,7 +451,7 @@ func isWhiteListedIP(ipStr string) bool {
 		return false
 	}
 
-	return ip.IsLoopback() || ip.IsPrivate()
+	return ip.IsLoopback()
 }
 
 func (s *SIEMService) CorrelateLog(secLog models.SecurityLog) models.SecurityLog {
@@ -463,7 +469,7 @@ func (s *SIEMService) CorrelateLog(secLog models.SecurityLog) models.SecurityLog
 		}
 
 		key := fmt.Sprintf("%s:%s", rule.id, secLog.SourceIP)
-		timestamps := s.slidingWIndow[key]
+		timestamps := s.slidingWindow[key]
 
 		cutoff := now.Add(-rule.window)
 		validIdx := len(timestamps)
@@ -476,7 +482,7 @@ func (s *SIEMService) CorrelateLog(secLog models.SecurityLog) models.SecurityLog
 		timestamps = timestamps[validIdx:]
 
 		timestamps = append(timestamps, now)
-		s.slidingWIndow[key] = timestamps
+		s.slidingWindow[key] = timestamps
 
 		if len(timestamps) >= rule.threshold {
 			secLog.Severity = rule.targetSev

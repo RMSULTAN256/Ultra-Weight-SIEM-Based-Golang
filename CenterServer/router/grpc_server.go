@@ -114,6 +114,18 @@ func (s *GRPCServer) StreamLogs(stream proto.IngestionService_StreamLogsServer) 
 }
 
 func (s *GRPCServer) SendHeartbeat(ctx context.Context, req *proto.HeartbeatPacket) (*proto.Ack, error) {
+	want := os.Getenv("AGENT_API_KEY")
+	if want != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return &proto.Ack{Success: false}, status.Error(codes.Unauthenticated, "metadata context missing")
+		}
+		keys := md.Get("x-agent-key")
+		if len(keys) == 0 || subtle.ConstantTimeCompare([]byte(keys[0]), []byte(want)) != 1 {
+			return &proto.Ack{Success: false}, status.Errorf(codes.Unauthenticated, "token grpc not valid")
+		}
+	}
+
 	var status models.DeviceStatus
 	if err := sonic.Unmarshal(req.PayloadJson, &status); err != nil {
 		return &proto.Ack{Success: false}, err

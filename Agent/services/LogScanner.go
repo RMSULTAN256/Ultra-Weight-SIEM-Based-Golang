@@ -45,24 +45,44 @@ var rules = []struct {
 	kw, typ string
 	sev     int
 }{
+	// Web Application & SQL Injection Attacks
 	{"union select", "web_attack", 10},
+	{"union all select", "web_attack", 10},
+	{"' or '1'='1", "web_attack", 10},
+	{"' or 1=1", "web_attack", 10},
+	{"information_schema", "web_attack", 10},
+	{"sleep(", "web_attack", 10},
+	{"benchmark(", "web_attack", 10},
+	{"drop table", "web_attack", 11},
+	{"insert into", "web_attack", 9},
 	{"eval(", "web_attack", 10},
+	{"base64_decode", "web_attack", 9},
 	{"/etc/passwd", "web_attack", 10},
 	{"<script", "web_attack", 10},
 	{"cmd.exe", "web_attack", 10},
 	{"/bin/sh", "web_attack", 10},
+	{"/bin/bash", "web_attack", 10},
 
+	// Authentication & Database Brute Force
 	{"failed password", "auth_failure", 6},
 	{"invalid user", "auth_failure", 6},
 	{"authentication failure", "auth_failure", 6},
+	{"access denied for user", "db_auth_failure", 7},
+	{"password authentication failed for user", "db_auth_failure", 7},
+	{"aborted connection", "db_anomaly", 6},
+	{"sqlstate[", "sql_error", 7},
 
+	// Network, Firewall & Port Scans
 	{"ufw block", "port_scan", 5},
 	{"connection refused", "port_scan", 4},
 
+	// Privilege Escalation
 	{"sudo:", "privilege_activity", 5},
 	{"pam_unix(sudo:session): session opened", "privilege_activity", 5},
 
+	// System & Kernel Errors
 	{"oom-killer", "system_error", 8},
+	{"out of memory", "system_error", 8},
 	{"segfault", "system_error", 8},
 }
 
