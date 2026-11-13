@@ -135,6 +135,14 @@ const state = {
     currentPage: 1,
     pageSize: 15,
     searchQuery: ''
+  },
+
+  // Suspicious Watchlist Pagination & Filtering
+  suspiciousPagination: {
+    currentPage: 1,
+    pageSize: 15,
+    searchQuery: '',
+    threatFilter: 'ALL'
   }
 };
 
@@ -143,6 +151,7 @@ const viewTitles = {
   'view-overview': 'Overview',
   'view-fleet': 'Agents Fleet',
   'view-ip-traffic': 'Inbound IP Traffic',
+  'view-suspicious': 'Suspicious Threat Watchlist',
   'view-events': 'Security Events',
   'view-containment': 'Zero-Trust Containment'
 };
@@ -803,6 +812,7 @@ async function loadInitialIPs() {
       if (Array.isArray(list)) {
         list.forEach(item => updateOrAddIPRecord(item, false));
         renderIPTable();
+        renderSuspiciousTable();
       }
     }
   } catch (err) {
@@ -926,6 +936,36 @@ function handleIncomingEvent(data) {
 
     // Always maintain high alerts count accurately within active buffer
     state.highAlertsCount = state.eventsList.filter(e => e.level >= 7).length;
+
+    // Auto-enrich / update IP record if source_ip is flagged suspicious/critical
+    if (norm.source_ip && norm.source_ip !== '-' && norm.source_ip !== '127.0.0.1') {
+      const isCritical = norm.level >= 12;
+      const isSuspicious = norm.level >= 7;
+      let rec = state.ipRecords.get(norm.source_ip);
+      if (!rec && (isCritical || isSuspicious)) {
+        rec = {
+          ip: norm.source_ip,
+          hostname: norm.hostname || norm.agent || 'cluster-node',
+          category: norm.rule_id || norm.mitre || norm.event_type || 'Security Alert',
+          request_count: 1,
+          first_seen: norm.timestamp || new Date().toISOString(),
+          last_seen: norm.timestamp || new Date().toISOString(),
+          threat_level: isCritical ? 'Critical' : 'Suspicious',
+          status: 'Monitored'
+        };
+        state.ipRecords.set(norm.source_ip, rec);
+        renderIPTable();
+        renderSuspiciousTable();
+      } else if (rec && (isCritical || isSuspicious)) {
+        rec.request_count = (rec.request_count || 1) + 1;
+        rec.last_seen = norm.timestamp || new Date().toISOString();
+        if (isCritical) rec.threat_level = 'Critical';
+        else if (rec.threat_level !== 'Critical') rec.threat_level = 'Suspicious';
+        if (norm.rule_id) rec.category = norm.rule_id;
+        renderIPTable();
+        renderSuspiciousTable();
+      }
+    }
 
     updateKPIStats();
 
@@ -1573,7 +1613,10 @@ if (btnOverviewRefresh) {
 // ==========================================================================
 function updateOrAddIPRecord(rec, shouldRender = true) {
   state.ipRecords.set(rec.ip, rec);
-  if (shouldRender) renderIPTable();
+  if (shouldRender) {
+    renderIPTable();
+    renderSuspiciousTable();
+  }
 }
 
 function getFilteredIPs() {
@@ -1732,6 +1775,9 @@ function renderIPTable() {
   if (controlsEl) {
     controlsEl.innerHTML = buildPaginationButtons(currentPage, totalPages, 'setIPPage');
   }
+
+  // Also keep Suspicious Threat Watchlist synchronized
+  renderSuspiciousTable();
 }
 
 window.setIPPage = function(page) {
@@ -1779,12 +1825,233 @@ async function toggleBlockIP(ip) {
       if (rec) {
         rec.status = data.current_status;
         renderIPTable();
+        renderSuspiciousTable();
       }
     }
   } catch (err) {
     alert("Gagal mengubah status firewall iptables: " + err);
   }
 }
+
+// ==========================================================================
+// SUSPICIOUS THREAT WATCHLIST LOGIC WITH PAGINATION
+// ==========================================================================
+function getFilteredSuspiciousIPs() {
+  const allIPs = Array.from(state.ipRecords.values()).sort((a, b) => {
+    const aScore = a.threat_level === 'Critical' ? 2 : (a.threat_level === 'Suspicious' ? 1 : 0);
+    const bScore = b.threat_level === 'Critical' ? 2 : (b.threat_level === 'Suspicious' ? 1 : 0);
+    if (bScore !== aScore) return bScore - aScore;
+    return (b.request_count || 0) - (a.request_count || 0);
+  });
+
+  // Base list: only suspicious, critical, or blocked IPs
+  let list = allIPs.filter(r => r.threat_level === 'Critical' || r.threat_level === 'Suspicious' || (r.status && r.status.includes('Blocked')));
+
+  // Filter Pills
+  const filter = state.suspiciousPagination.threatFilter;
+  if (filter === 'CRITICAL') {
+    list = list.filter(r => r.threat_level === 'Critical');
+  } else if (filter === 'SUSPICIOUS') {
+    list = list.filter(r => r.threat_level === 'Suspicious');
+  } else if (filter === 'BLOCKED') {
+    list = list.filter(r => r.status && r.status.includes('Blocked'));
+  }
+
+  // Search Filter
+  const q = state.suspiciousPagination.searchQuery.toLowerCase().trim();
+  if (q) {
+    list = list.filter(r => {
+      const str = `${r.ip} ${r.hostname || ''} ${r.category || ''} ${r.threat_level || ''} ${r.status || ''}`.toLowerCase();
+      return str.includes(q);
+    });
+  }
+
+  return list;
+}
+
+function renderSuspiciousTable() {
+  const tbody = document.getElementById('suspiciousTableBody');
+  const infoEl = document.getElementById('suspiciousPaginationInfo');
+  const controlsEl = document.getElementById('suspiciousPaginationControls');
+
+  const allIPs = Array.from(state.ipRecords.values());
+  const allThreats = allIPs.filter(r => r.threat_level === 'Critical' || r.threat_level === 'Suspicious' || (r.status && r.status.includes('Blocked')));
+
+  // Calculate Metrics
+  const totalThreats = allThreats.length;
+  let criticalCount = 0;
+  let suspiciousCount = 0;
+  let blockedCount = 0;
+  let totalHits = 0;
+
+  allThreats.forEach(r => {
+    totalHits += (r.request_count || 1);
+    if (r.threat_level === 'Critical') criticalCount++;
+    if (r.threat_level === 'Suspicious') suspiciousCount++;
+    if (r.status && r.status.includes('Blocked')) blockedCount++;
+  });
+
+  // Update Nav Badge
+  const navSuspiciousCountEl = document.getElementById('navSuspiciousCount');
+  if (navSuspiciousCountEl) navSuspiciousCountEl.textContent = totalThreats;
+
+  // Update KPI Cards
+  const totalEl = document.getElementById('suspiciousTabTotalCount');
+  if (totalEl) totalEl.textContent = totalThreats;
+
+  const critEl = document.getElementById('suspiciousTabCriticalCount');
+  if (critEl) critEl.textContent = criticalCount;
+
+  const hitsEl = document.getElementById('suspiciousTabHitsCount');
+  if (hitsEl) hitsEl.textContent = totalHits.toLocaleString();
+
+  const contEl = document.getElementById('suspiciousTabContainedCount');
+  if (contEl) contEl.textContent = blockedCount;
+
+  // Update Filter Pill Counts
+  const pillAll = document.getElementById('pillCountSuspiciousAll');
+  if (pillAll) pillAll.textContent = totalThreats;
+
+  const pillCrit = document.getElementById('pillCountSuspiciousCritical');
+  if (pillCrit) pillCrit.textContent = criticalCount;
+
+  const pillWarn = document.getElementById('pillCountSuspiciousWarn');
+  if (pillWarn) pillWarn.textContent = suspiciousCount;
+
+  const pillBlock = document.getElementById('pillCountSuspiciousBlocked');
+  if (pillBlock) pillBlock.textContent = blockedCount;
+
+  if (!tbody) return;
+
+  const filtered = getFilteredSuspiciousIPs();
+  const total = filtered.length;
+  const pageSize = state.suspiciousPagination.pageSize;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  if (state.suspiciousPagination.currentPage > totalPages) {
+    state.suspiciousPagination.currentPage = totalPages;
+  }
+  const currentPage = state.suspiciousPagination.currentPage;
+
+  const startIdx = total === 0 ? 0 : (currentPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, total);
+  const pageItems = filtered.slice(startIdx, endIdx);
+
+  if (pageItems.length === 0) {
+    tbody.innerHTML = `<tr class="placeholder-row"><td colspan="9">No suspicious or critical IP threats recorded yet. System is clean.</td></tr>`;
+  } else {
+    tbody.innerHTML = pageItems.map(r => {
+      const firstTime = formatDateTime(r.first_seen);
+      const lastTime = formatDateTime(r.last_seen);
+
+      let threatClass = 'badge-level-info';
+      if (r.threat_level === 'Critical') threatClass = 'badge-level-danger';
+      else if (r.threat_level === 'Suspicious') threatClass = 'badge-level-warn';
+
+      const isBlocked = r.status && r.status.includes('Blocked');
+      const statusClass = isBlocked ? 'badge-status-blocked' : 'badge-status-monitored';
+      const actionBtnText = isBlocked ? 'Unblock' : 'Block (iptables)';
+      const btnDanger = isBlocked ? '' : 'btn-danger';
+
+      return `
+        <tr>
+          <td><strong class="ip-addr" style="color: #f87171;">${r.ip}</strong></td>
+          <td><span class="hostname-badge">${r.hostname || 'cluster-node'}</span></td>
+          <td><span class="cat-pill">${r.category || 'Security Alert'}</span></td>
+          <td><span class="mini-req-count" style="color: #fbbf24;">${(r.request_count || 1).toLocaleString()} hits</span></td>
+          <td class="time-cell">${firstTime}</td>
+          <td class="time-cell">${lastTime}</td>
+          <td><span class="badge-level ${threatClass}">${r.threat_level || 'Suspicious'}</span></td>
+          <td><span class="badge-status ${statusClass}">${r.status || 'Monitored'}</span></td>
+          <td>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button class="btn-action" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border-color: rgba(56, 189, 248, 0.25);" onclick="inspectIPEvents('${r.ip}')" title="Inspect all correlated logs for this IP">Inspect Logs</button>
+              ${isAdmin() ? `<button class="btn-action ${btnDanger}" onclick="toggleBlockIP('${r.ip}')">${actionBtnText}</button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Pagination Info & Controls
+  if (infoEl) {
+    if (total === 0) {
+      infoEl.textContent = 'Showing 0 of 0 suspicious IPs';
+    } else {
+      infoEl.innerHTML = `Showing <strong>${startIdx + 1}&ndash;${endIdx}</strong> of <strong>${total}</strong> suspicious IPs`;
+    }
+  }
+
+  if (controlsEl) {
+    controlsEl.innerHTML = buildPaginationButtons(currentPage, totalPages, 'setSuspiciousPage');
+  }
+}
+
+window.setSuspiciousPage = function(page) {
+  const total = getFilteredSuspiciousIPs().length;
+  const totalPages = Math.max(1, Math.ceil(total / state.suspiciousPagination.pageSize));
+  if (page < 1) page = 1;
+  if (page > totalPages) page = totalPages;
+
+  state.suspiciousPagination.currentPage = page;
+  renderSuspiciousTable();
+};
+
+window.inspectIPEvents = function(ip) {
+  state.eventsPagination.searchQuery = ip;
+  state.eventsPagination.currentPage = 1;
+  state.eventsPagination.severityFilter = 'ALL';
+  state.eventsPagination.categoryFilter = 'ALL';
+
+  const logFilter = document.getElementById('logFilter');
+  if (logFilter) logFilter.value = ip;
+
+  const clearLogFilterBtn = document.getElementById('clearLogFilterBtn');
+  if (clearLogFilterBtn) clearLogFilterBtn.classList.remove('hidden');
+
+  // Reset category pills in Events tab
+  document.querySelectorAll('#eventsCategoryPills .pill-btn').forEach(b => {
+    if (b.dataset.category === 'ALL') b.classList.add('active');
+    else b.classList.remove('active');
+  });
+
+  // Switch to Security Events tab
+  switchTab('view-events');
+  renderEventsTable();
+};
+
+// Search Filter Input Listener for Suspicious Watchlist
+const suspiciousFilterInput = document.getElementById('suspiciousFilterInput');
+if (suspiciousFilterInput) {
+  suspiciousFilterInput.addEventListener('input', (e) => {
+    state.suspiciousPagination.searchQuery = e.target.value;
+    state.suspiciousPagination.currentPage = 1;
+    renderSuspiciousTable();
+  });
+}
+
+// Page Size Listener for Suspicious Watchlist
+const suspiciousPageSizeSelect = document.getElementById('suspiciousPageSize');
+if (suspiciousPageSizeSelect) {
+  suspiciousPageSizeSelect.addEventListener('change', (e) => {
+    state.suspiciousPagination.pageSize = parseInt(e.target.value, 10) || 15;
+    state.suspiciousPagination.currentPage = 1;
+    renderSuspiciousTable();
+  });
+}
+
+// Threat Filter Pills Listener
+document.querySelectorAll('#suspiciousFilterPills .pill-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#suspiciousFilterPills .pill-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    state.suspiciousPagination.threatFilter = btn.dataset.filter || 'ALL';
+    state.suspiciousPagination.currentPage = 1;
+    renderSuspiciousTable();
+  });
+});
 
 // ==========================================================================
 // AGENTS FLEET TELEMETRY LOGIC

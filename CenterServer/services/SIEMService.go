@@ -53,6 +53,15 @@ var defaultCorrelationRules = []correlationRule{
 		mitreID:     "T1190 Exploit Public-Facing",
 		description: "Multiple Web Application Exploitation Attempts",
 	},
+	{
+		id:          "RULE-DB-BRUTEFORCE",
+		eventType:   "db_auth_failure",
+		window:      60 * time.Second,
+		threshold:   5,
+		targetSev:   12, // Critical
+		mitreID:     "T1110.001 Brute Force",
+		description: "Database Authentication Brute Force Detected",
+	},
 }
 
 type SIEMService struct {

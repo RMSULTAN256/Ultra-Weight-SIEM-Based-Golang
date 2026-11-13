@@ -265,6 +265,11 @@ body {
   color: var(--color-danger);
 }
 
+.badge-count.warning-badge {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
 .sidebar-footer {
   padding: 10px 14px;
   border-top: 1px solid var(--border-subtle);

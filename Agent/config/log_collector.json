@@ -8,8 +8,18 @@
             "keywords": []
         },
         {
+            "app_name": "Apache Web",
+            "file_path": "/var/log/apache2/*.log",
+            "keywords": []
+        },
+        {
             "app_name": "SSH Auth",
             "file_path": "/var/log/auth.log",
+            "keywords": []
+        },
+        {
+            "app_name": "System Syslog",
+            "file_path": "/var/log/syslog",
             "keywords": []
         },
         {
@@ -23,12 +33,32 @@
             ]
         },
         {
-            "app_name": "UFW",
+            "app_name": "UFW Firewall",
             "file_path": "/var/log/ufw.log",
             "keywords": []
         },
         {
-            "app_name": "Package",
+            "app_name": "MySQL Database",
+            "file_path": "/var/log/mysql/*.log",
+            "keywords": []
+        },
+        {
+            "app_name": "MariaDB Database",
+            "file_path": "/var/log/mariadb/*.log",
+            "keywords": []
+        },
+        {
+            "app_name": "PostgreSQL Database",
+            "file_path": "/var/log/postgresql/*.log",
+            "keywords": []
+        },
+        {
+            "app_name": "Web Application",
+            "file_path": "/var/www/*/storage/logs/*.log",
+            "keywords": []
+        },
+        {
+            "app_name": "Package Management",
             "file_path": "/var/log/dpkg.log",
             "keywords": [
                 " install ",

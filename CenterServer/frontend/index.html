@@ -58,6 +58,16 @@
         <span class="badge-count info-badge" id="navIpCount">0</span>
       </button>
 
+      <button class="nav-item" data-target="view-suspicious">
+        <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span>Suspicious Watchlist</span>
+        <span class="badge-count warning-badge" id="navSuspiciousCount">0</span>
+      </button>
+
       <button class="nav-item" data-target="view-events">
         <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -407,6 +417,112 @@
             <div class="pagination-size">
               <label for="ipPageSize">Rows:</label>
               <select id="ipPageSize" class="select-page-size">
+                <option value="10">10</option>
+                <option value="15" selected>15</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== -->
+      <!-- TAB 3.5: SUSPICIOUS THREAT WATCHLIST                 -->
+      <!-- ==================================================== -->
+      <section id="view-suspicious" class="tab-pane">
+        <div class="section-title-bar flex-between">
+          <div>
+            <h3>Suspicious Threat Watchlist</h3>
+            <p>Correlated anomalous origins, brute-force actors, and high-severity client IPs flagged for SOC investigation</p>
+          </div>
+          <div class="toolbar-actions">
+            <div class="search-box">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" id="suspiciousFilterInput" placeholder="Filter suspicious IP, host, vector...">
+            </div>
+            <button class="btn-secondary" onclick="loadInitialIPs()" title="Refresh Threat List">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Threat Stats Counters -->
+        <div class="kpi-grid" style="margin-bottom: 20px;">
+          <div class="kpi-card">
+            <div class="kpi-header"><span>FLAGGED SUSPICIOUS / CRITICAL</span></div>
+            <div class="kpi-value warning-text" id="suspiciousTabTotalCount">0</div>
+            <div class="kpi-footer">Unique IPs with Severity &ge; 7</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>CRITICAL ESCALATED (SEV 12+)</span></div>
+            <div class="kpi-value danger-text" id="suspiciousTabCriticalCount">0</div>
+            <div class="kpi-footer">Sliding window / High exploit threats</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>TOTAL THREAT REQUESTS</span></div>
+            <div class="kpi-value info-text" id="suspiciousTabHitsCount">0</div>
+            <div class="kpi-footer">Accumulated hits from anomalous IPs</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-header"><span>CONTAINED / QUARANTINED</span></div>
+            <div class="kpi-value text-success" id="suspiciousTabContainedCount">0</div>
+            <div class="kpi-footer">Under active Linux iptables DROP</div>
+          </div>
+        </div>
+
+        <!-- Threat Filter Toolbar -->
+        <div class="table-toolbar" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+          <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Filter Threat:</span>
+          <div class="filter-pills" id="suspiciousFilterPills">
+            <button class="pill-btn active" data-filter="ALL">All Threats (<span id="pillCountSuspiciousAll">0</span>)</button>
+            <button class="pill-btn pill-danger" data-filter="CRITICAL">Critical Only (<span id="pillCountSuspiciousCritical">0</span>)</button>
+            <button class="pill-btn pill-warning" data-filter="SUSPICIOUS">Suspicious Only (<span id="pillCountSuspiciousWarn">0</span>)</button>
+            <button class="pill-btn" data-filter="BLOCKED">Quarantined (<span id="pillCountSuspiciousBlocked">0</span>)</button>
+          </div>
+        </div>
+
+        <!-- Full Suspicious Watchlist Table -->
+        <div class="panel-card">
+          <div class="table-wrapper">
+            <table class="wazuh-table">
+              <thead>
+                <tr>
+                  <th width="160">THREAT SOURCE IP</th>
+                  <th width="150">TARGET HOST</th>
+                  <th width="180">SUSPECTED ATTACK / CATEGORY</th>
+                  <th width="110">HIT COUNT</th>
+                  <th width="130">FIRST SEEN</th>
+                  <th width="130">LAST SEEN</th>
+                  <th width="120">THREAT LEVEL</th>
+                  <th width="130">CONTAINMENT</th>
+                  <th width="200">SOC ANALYST ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="suspiciousTableBody">
+                <tr class="placeholder-row">
+                  <td colspan="9">No suspicious or critical IP threats recorded yet. System is clean.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Suspicious Pagination Bar -->
+          <div class="pagination-bar" id="suspiciousPaginationBar">
+            <div class="pagination-info" id="suspiciousPaginationInfo">
+              Showing 0 of 0 suspicious IPs
+            </div>
+            <div class="pagination-controls" id="suspiciousPaginationControls">
+              <!-- Dynamically injected buttons -->
+            </div>
+            <div class="pagination-size">
+              <label for="suspiciousPageSize">Rows:</label>
+              <select id="suspiciousPageSize" class="select-page-size">
                 <option value="10">10</option>
                 <option value="15" selected>15</option>
                 <option value="25">25</option>
