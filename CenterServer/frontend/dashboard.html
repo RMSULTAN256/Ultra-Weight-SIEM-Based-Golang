@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | Pixel-Sky OS</title>
+  <link rel="stylesheet" href="/pixel-theme.css?v=2.2">
+  <script src="/pixel-layout.js?v=2.2"></script>
+  <script src="/charts.js?v=2.2"></script>
+  <script src="/dashboard.js?v=2.2" defer></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top HUD Address Bar -->
+    <header id="shared-hud"></header>
+
+    <!-- Horizontal Multi-Page Route Tabs -->
+    <nav id="shared-route-tabs"></nav>
+
+    <!-- Quest Notification Banner -->
+    <div id="shared-quest-banner"></div>
+
+    <!-- Two-Column Workspace (Sidebar + Main Content) -->
+    <div class="workspace-grid">
+      <!-- Left Column Sidebar -->
+      <aside id="shared-sidebar"></aside>
+
+      <!-- Right Main Column -->
+      <main class="main-column">
+        <!-- Active Route Strip -->
+        <div id="active-route-strip"></div>
+
+        <!-- ROW 1: 3 Mini Island KPI Cards (Image 1) -->
+        <div class="kpi-row-grid">
+          <!-- Card 1: Total Requests -->
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>⚡</span>
+                <span>TOTAL REQUESTS</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span class="mini-kpi-badge">LIVE</span>
+                <span class="window-dot"></span>
+                <span class="window-dot"></span>
+                <span class="window-dot"></span>
+              </div>
+            </div>
+            <div class="mini-kpi-body">
+              <div class="mini-kpi-val-row">
+                <span class="mini-kpi-val" id="kpiTotalRequests">0</span>
+                <span class="mini-kpi-status-tag" id="kpiTotalRequestsTag" style="background:#DCFCE7; color:#16A34A;">STREAM</span>
+              </div>
+              <div class="mini-kpi-progress-bar">
+                <div class="mini-kpi-progress-fill" id="kpiTotalRequestsFill" style="width: 100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Healthy Nodes -->
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>🛡️</span>
+                <span>HEALTHY NODES</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span class="mini-kpi-badge">STATUS</span>
+                <span class="window-dot"></span>
+                <span class="window-dot"></span>
+                <span class="window-dot"></span>
+              </div>
+            </div>
+            <div class="mini-kpi-body">
+              <div class="mini-kpi-val-row">
+                <span class="mini-kpi-val" id="kpiHealthyNodes">0 / 0</span>
+                <span class="mini-kpi-status-tag" id="kpiHealthyNodesTag" style="background:#E0F2FE; color:#0284C7;">ACTIVE</span>
+              </div>
+              <div class="mini-kpi-progress-bar">
+                <div class="mini-kpi-progress-fill" id="kpiHealthyNodesFill" style="width: 100%; background:#22C55E;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Avg System Load -->
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>⚙️</span>
+                <span>AVG SYSTEM LOAD</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span class="mini-kpi-badge">CORE</span>
+                <span class="window-dot"></span>
+                <span class="window-dot"></span>
+                <span class="window-dot"></span>
+              </div>
+            </div>
+            <div class="mini-kpi-body">
+              <div class="mini-kpi-val-row">
+                <span class="mini-kpi-val" id="kpiSystemLoad">0%</span>
+                <span class="mini-kpi-status-tag" id="kpiSystemLoadTag" style="background:#FEF3C7; color:#D97706;">OPTIMAL</span>
+              </div>
+              <div class="mini-kpi-progress-bar">
+                <div class="mini-kpi-progress-fill" id="kpiSystemLoadFill" style="width: 25%; background:#00F0FF;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 2: DATA CHART & STATUS CHART (DONUT) -->
+        <div class="dashboard-two-col">
+          <!-- Left: Data Chart (Bar) -->
+          <div class="island-card">
+            <div class="island-grass-cap"></div>
+            <div class="island-header-bar">
+              <div class="island-header-title">
+                <span>📊</span>
+                <div>
+                  <div>DATA CHART (EVENT DISTRIBUTION)</div>
+                  <span class="island-header-sub">Distribusi Kategori Event Berdasarkan Log Nyata Sistem</span>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="mini-kpi-badge">CHARTZ</span>
+                <div class="window-dots">
+                  <div class="window-dot"></div>
+                  <div class="window-dot"></div>
+                  <div class="window-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="island-body">
+              <div class="chart-box">
+                <canvas id="chartTrafficBar"></canvas>
+              </div>
+            </div>
+            <div class="island-dirt-crust"></div>
+          </div>
+
+          <!-- Right: Status Chart (Donut) -->
+          <div class="island-card">
+            <div class="island-grass-cap"></div>
+            <div class="island-header-bar">
+              <div class="island-header-title">
+                <span>🍩</span>
+                <div>
+                  <div>STATUS CHART</div>
+                  <span class="island-header-sub">Rasio Simpul Armada, IP Monitored, &amp; Ancaman</span>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="mini-kpi-badge">LIVE RATIO</span>
+                <div class="window-dots">
+                  <div class="window-dot"></div>
+                  <div class="window-dot"></div>
+                  <div class="window-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="island-body">
+              <div class="chart-box">
+                <canvas id="chartStatusDonut"></canvas>
+              </div>
+              <div id="donutLegend" style="display: flex; justify-content: center; gap: 12px; margin-top: 8px; font-family: var(--font-pixel); font-size: 8px;">
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; background: #22C55E; display: inline-block;"></span> ONLINE: 0</span>
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; background: #00F0FF; display: inline-block;"></span> MONITORED: 0</span>
+                <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 8px; height: 8px; background: #EF4444; display: inline-block;"></span> THREAT: 0</span>
+              </div>
+            </div>
+            <div class="island-dirt-crust"></div>
+          </div>
+        </div>
+
+        <!-- ROW 3: REAL TIME TELEMETRY & STATUS SUMMARY TABLE (IMAGE 2) -->
+        <div class="dashboard-two-col">
+          <!-- Left: Real Time Telemetry Line Chart -->
+          <div class="island-card">
+            <div class="island-grass-cap"></div>
+            <div class="island-header-bar">
+              <div class="island-header-title">
+                <span>⚡</span>
+                <div>
+                  <div>REAL TIME TELEMETRY</div>
+                  <span class="island-header-sub">Throughput Log &amp; Latensi Respon Real-Time</span>
+                </div>
+              </div>
+              <div class="window-dots">
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+              </div>
+            </div>
+            <div class="island-body" style="background: #071529; padding: 10px;">
+              <div class="chart-box">
+                <canvas id="chartRealTimeLine"></canvas>
+              </div>
+            </div>
+            <div class="island-dirt-crust"></div>
+          </div>
+
+          <!-- Right: Status Summary Table -->
+          <div class="island-card">
+            <div class="island-grass-cap"></div>
+            <div class="island-header-bar">
+              <div class="island-header-title">
+                <span>📋</span>
+                <div>
+                  <div>STATUS SUMMARY</div>
+                  <span class="island-header-sub">Daftar simpul terpantau &amp; pemanfaatan resource</span>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button class="pixel-btn pixel-btn-green" style="font-size: 8px; padding: 2px 6px;" onclick="refreshDashboardData()">⟳ REFRESH</button>
+                <div class="window-dots">
+                  <div class="window-dot"></div>
+                  <div class="window-dot"></div>
+                  <div class="window-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="island-body" style="padding: 10px;">
+              <!-- Status Filters & Search Bar -->
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                <div style="display: flex; gap: 4px;">
+                  <button class="filter-pill-btn active" data-filter="ALL" onclick="filterSummaryTable('ALL')">ALL</button>
+                  <button class="filter-pill-btn" data-filter="ONLINE" onclick="filterSummaryTable('ONLINE')">ONLINE</button>
+                  <button class="filter-pill-btn" data-filter="WARNING" onclick="filterSummaryTable('WARNING')">WARNING</button>
+                </div>
+                <div style="display: flex; align-items: center; background: #FFFFFF; border: 1.5px solid #0F172A; padding: 2px 6px;">
+                  <span style="font-size: 10px;">🔍</span>
+                  <input type="text" id="summarySearchInput" placeholder="Cari simpul/IP..." oninput="applySummaryFilter()" style="border: none; outline: none; font-size: 10px; font-family: var(--font-mono); width: 130px;">
+                </div>
+              </div>
+
+              <!-- Status Summary Table -->
+              <div style="overflow-x: auto;">
+                <table class="pixel-table">
+                  <thead>
+                    <tr>
+                      <th>SYSTEM NODE</th>
+                      <th>IP &amp; PLATFORM</th>
+                      <th>LOG COUNT</th>
+                      <th>CPU LOAD</th>
+                      <th>STATUS (KLIK)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="summaryTableBody">
+                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 18px;">Memuat data armada simpul...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="island-dirt-crust"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

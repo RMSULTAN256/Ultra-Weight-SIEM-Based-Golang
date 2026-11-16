@@ -3,70 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login | Wazuh-Lean Mini-SIEM SOC</title>
-  <link rel="stylesheet" href="/style.css?v=3.3">
+  <title>Login | Mini-SIEM 16-Bit SOC</title>
+  <link rel="stylesheet" href="/pixel-theme.css?v=1.0">
   <style>
     body.login-page {
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background-color: var(--bg-app);
-      font-family: var(--font-sans);
       margin: 0;
       padding: 20px;
     }
 
-    .auth-card {
+    .auth-island-card {
       width: 100%;
-      max-width: 380px;
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-md);
-      padding: 32px 28px;
-      animation: fadeIn 0.25s ease-out;
+      max-width: 400px;
+      animation: float-island 5s ease-in-out infinite;
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .auth-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .auth-logo {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 48px;
-      height: 48px;
-      background: var(--primary-subtle);
-      border: 1px solid var(--primary-border);
-      border-radius: var(--radius-md);
-      margin-bottom: 12px;
-    }
-
-    .auth-title {
-      font-size: 19px;
-      font-weight: 700;
-      color: var(--text-primary);
-      letter-spacing: 0.3px;
-    }
-
-    .auth-title span {
-      color: var(--primary);
-    }
-
-    .auth-subtitle {
+    .alert-box {
+      padding: 8px 12px;
+      font-family: var(--font-mono);
       font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 4px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
+      margin-bottom: 16px;
+      border: 2px solid var(--pixel-border-color);
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alert-box.error {
+      display: flex;
+      background: var(--pixel-danger-bg);
+      color: var(--pixel-danger);
+    }
+
+    .alert-box.success {
+      display: flex;
+      background: var(--pixel-success-bg);
+      color: var(--pixel-success);
     }
 
     .form-group {
@@ -75,121 +50,78 @@
 
     .form-label {
       display: block;
-      font-size: 11px;
-      font-weight: 600;
+      font-family: var(--font-pixel);
+      font-size: 9px;
       color: var(--text-muted);
       margin-bottom: 6px;
       text-transform: uppercase;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.5px;
     }
 
-    .form-input {
+    .pixel-form-input {
       width: 100%;
-      background: var(--bg-input);
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-md);
-      padding: 9px 12px;
-      color: var(--text-primary);
+      background: #FFFFFF;
+      border: 2px solid var(--pixel-border-color);
+      box-shadow: 2px 2px 0 0 rgba(15, 23, 42, 0.2);
+      padding: 10px 12px;
+      color: var(--text-main);
+      font-family: var(--font-mono);
       font-size: 13px;
       outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      transition: all 0.15s ease;
     }
 
-    .form-input:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-    }
-
-    .btn-submit {
-      width: 100%;
-      background: var(--primary);
-      border: none;
-      border-radius: var(--radius-md);
-      color: #fff;
-      padding: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: background 0.15s;
-    }
-
-    .btn-submit:hover {
-      background: var(--primary-hover);
-    }
-
-    .btn-submit:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .alert-box {
-      padding: 9px 12px;
-      border-radius: var(--radius-sm);
-      font-size: 11.5px;
-      margin-bottom: 16px;
-      display: none;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .alert-box.error {
-      display: flex;
-      background: var(--color-danger-bg);
-      border: 1px solid var(--color-danger-border);
-      color: #fca5a5;
-    }
-
-    .alert-box.success {
-      display: flex;
-      background: var(--color-success-bg);
-      border: 1px solid var(--color-success-border);
-      color: #86efac;
-    }
-
-    .auth-footer-note {
-      text-align: center;
-      margin-top: 22px;
-      font-size: 11px;
-      color: var(--text-dim);
+    .pixel-form-input:focus {
+      border-color: var(--neon-cyan);
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.6), 2px 2px 0 var(--pixel-border-color);
     }
   </style>
 </head>
 <body class="login-page">
 
-  <div class="auth-card">
-    <!-- Header Branding -->
-    <div class="auth-header">
-      <div class="auth-logo">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
+  <div class="island-card auth-island-card active-panel">
+    <!-- Top Grass Header -->
+    <div class="island-grass-cap"></div>
+
+    <div class="island-inner" style="padding: 28px 24px;">
+      <!-- Branding Logo & Title -->
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div class="brand-island-icon" style="margin: 0 auto 12px auto; width: 44px; height: 44px;">
+          <div class="brand-icon-grass" style="height: 12px;"></div>
+          <div class="brand-icon-core" style="font-size: 13px;">16b</div>
+          <div class="brand-icon-dirt" style="height: 12px;"></div>
+        </div>
+        <div class="brand-title" style="font-size: 16px;">MINI-SIEM <span>SOC</span></div>
+        <div class="brand-badge" style="font-size: 10px; margin-top: 4px;">CONSOLE ACCESS GATEWAY</div>
       </div>
-      <div class="auth-title">WAZUH <span>LEAN</span></div>
-      <div class="auth-subtitle">SOC Console Access Gateway</div>
+
+      <!-- Alert Notification Box -->
+      <div id="alertBox" class="alert-box"></div>
+
+      <!-- Form Login -->
+      <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+        <div class="form-group">
+          <label class="form-label" for="loginUsername">USERNAME / PENGGUNA</label>
+          <input type="text" id="loginUsername" class="pixel-form-input" placeholder="Masukkan username" required autocomplete="username" autofocus>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loginPassword">PASSWORD / KATA SANDI</label>
+          <input type="password" id="loginPassword" class="pixel-form-input" placeholder="Masukkan password" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" id="btnSubmitLogin" class="pixel-btn pixel-btn-cyan" style="width: 100%; padding: 12px; font-size: 11px; margin-top: 8px;">
+          <span>MASUK MISI SOC &rarr;</span>
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 20px; font-size: 11px; color: var(--text-muted);">
+        🔒 Zero-Trust Telemetry Protected &bull; Polibatam TA
+      </div>
     </div>
 
-    <!-- Alert Box Notifikasi -->
-    <div id="alertBox" class="alert-box"></div>
-
-    <!-- FORM LOGIN -->
-    <form id="loginForm" onsubmit="handleLoginSubmit(event)">
-      <div class="form-group">
-        <label class="form-label" for="loginUsername">Username</label>
-        <input type="text" id="loginUsername" class="form-input" placeholder="Masukkan username" required autocomplete="username" autofocus>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="loginPassword">Password</label>
-        <input type="password" id="loginPassword" class="form-input" placeholder="Masukkan password" required autocomplete="current-password">
-      </div>
-
-      <button type="submit" id="btnSubmitLogin" class="btn-submit">Masuk ke SOC Dashboard</button>
-    </form>
-
-    <div class="auth-footer-note">
-      🔒 Authorized Personnel Only • Protected by Zero-Trust
-    </div>
+    <!-- Bottom Dirt/Rock Crust -->
+    <div class="island-dirt-crust"></div>
   </div>
 
   <script>
@@ -223,8 +155,6 @@
       }
     }
 
-    // Token kedaluwarsa harus dianggap tidak ada. Tanpa ini, halaman login
-    // akan terus melempar user ke dashboard yang sudah tidak bisa memuat data.
     function getValidToken() {
       const t = localStorage.getItem('auth_token');
       if (!t) return null;
@@ -247,7 +177,7 @@
       const password = document.getElementById('loginPassword').value;
 
       btn.disabled = true;
-      btn.textContent = 'Memverifikasi...';
+      btn.innerHTML = '<span>MEMVERIFIKASI...</span>';
 
       try {
         const resp = await fetch('/api/v1/auth/login', {
@@ -256,14 +186,13 @@
           body: JSON.stringify({ username, password })
         });
 
-        // Rate limit: backend membalas 429 setelah 5 percobaan / menit
         if (resp.status === 429) {
           showAlert('Terlalu banyak percobaan login. Tunggu 1 menit lalu coba lagi.', 'error');
           return;
         }
 
         let data = {};
-        try { data = await resp.json(); } catch (_) { /* respons bukan JSON */ }
+        try { data = await resp.json(); } catch (_) {}
 
         if (!resp.ok) {
           showAlert(data.error || 'Username atau password salah', 'error');
@@ -271,7 +200,7 @@
         }
 
         if (!data.token) {
-          showAlert('Respons server tidak berisi token.', 'error');
+          showAlert('Respons server tidak berisi token JWT.', 'error');
           return;
         }
 
@@ -280,19 +209,17 @@
         localStorage.setItem('auth_user', data.username || username);
         localStorage.setItem('auth_role', (data.role || 'analyst').toLowerCase());
 
-        showAlert('Login berhasil! Mengalihkan ke dashboard...', 'success');
-
-        setTimeout(() => { window.location.replace('/'); }, 500);
+        showAlert('Autentikasi berhasil! Mengalihkan ke dashboard...', 'success');
+        setTimeout(() => { window.location.replace('/dashboard'); }, 500);
 
       } catch (err) {
         showAlert('Gagal terhubung ke server SIEM: ' + err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Masuk ke SOC Dashboard';
+        btn.innerHTML = '<span>MASUK MISI SOC &rarr;</span>';
       }
     }
 
-    // Auto-redirect hanya kalau sesi masih sah
     window.addEventListener('DOMContentLoaded', () => {
       const reason = new URLSearchParams(window.location.search).get('reason');
 
@@ -309,9 +236,8 @@
 
       if (getValidToken()) {
         showAlert('Sesi aktif terdeteksi. Mengalihkan ke dashboard...', 'success');
-        setTimeout(() => { window.location.replace('/'); }, 400);
+        setTimeout(() => { window.location.replace('/dashboard'); }, 400);
       } else {
-        // Bersihkan sisa token rusak/kedaluwarsa
         clearSession();
       }
     });

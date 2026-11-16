@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -50,6 +51,34 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize frontend filesystem: %v", err)
 	}
+
+	servePage := func(pageFile string) fiber.Handler {
+		return func(c fiber.Ctx) error {
+			file, err := subFS.Open(pageFile)
+			if err != nil {
+				return c.Status(fiber.StatusNotFound).SendString("Page not found: " + pageFile)
+			}
+			defer file.Close()
+			data, err := io.ReadAll(file)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).SendString("Error reading page")
+			}
+			c.Set("Content-Type", "text/html; charset=utf-8")
+			c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Set("Pragma", "no-cache")
+			c.Set("Expires", "0")
+			return c.Send(data)
+		}
+	}
+
+	app.Get("/", func(c fiber.Ctx) error {
+		return c.Redirect().To("/dashboard")
+	})
+	app.Get("/dashboard", servePage("dashboard.html"))
+	app.Get("/status", servePage("status.html"))
+	app.Get("/analytics", servePage("status.html"))
+	app.Get("/logs", servePage("logs.html"))
+	app.Get("/settings", servePage("settings.html"))
 
 	app.Use("/", static.New("", static.Config{
 		FS:         subFS,

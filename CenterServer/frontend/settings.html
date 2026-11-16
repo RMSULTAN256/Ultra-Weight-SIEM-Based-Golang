@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings &amp; Blueprint | Pixel-Sky OS</title>
+  <link rel="stylesheet" href="/pixel-theme.css?v=2.1">
+  <script src="/pixel-layout.js?v=2.1"></script>
+  <script src="/settings.js?v=2.1" defer></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top HUD Address Bar -->
+    <header id="shared-hud"></header>
+
+    <!-- Horizontal Multi-Page Route Tabs -->
+    <nav id="shared-route-tabs"></nav>
+
+    <!-- Quest Notification Banner -->
+    <div id="shared-quest-banner"></div>
+
+    <!-- Two-Column Workspace (Sidebar + Main Content) -->
+    <div class="workspace-grid">
+      <!-- Left Column Sidebar -->
+      <aside id="shared-sidebar"></aside>
+
+      <!-- Right Main Column -->
+      <main class="main-column">
+        <!-- Active Route Strip -->
+        <div id="active-route-strip"></div>
+
+        <!-- MAIN FLOATING ISLAND CARD: PROMPT & BLUEPRINT ARSITEKTUR (IMAGE 5) -->
+        <div class="island-card">
+          <div class="island-grass-cap"></div>
+          <div class="island-header-bar">
+            <div class="island-header-title">
+              <span style="font-size: 14px;">&gt;</span>
+              <div>
+                <div>OPSI A: PROMPT &amp; BLUEPRINT ARSITEKTUR (/SETTINGS)</div>
+                <span class="island-header-sub">Otomatis menyesuaikan antara Mode Kantor vs Mode Full Game</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="mini-kpi-badge" id="badgeGameMode" style="background: #00F0FF; color: #0F172A; font-weight: 700;">VERSI PULAU GAME</span>
+              <div class="window-dots">
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="island-body">
+            <!-- 3 Dropdown Selectors Grid (Image 5) -->
+            <div class="settings-selectors-grid">
+              <!-- Selector 1: Target Stack -->
+              <div class="pixel-select-box">
+                <span class="pixel-select-label">TARGET STACK / FRAMEWORK</span>
+                <select id="selectTargetStack" class="pixel-select" onchange="updatePromptBlueprint()">
+                  <option value="Next.js / Laravel Inertia" selected>Next.js / Laravel Inertia</option>
+                  <option value="Golang Native + Vanilla HTML/JS">Golang Native + Vanilla HTML/JS</option>
+                  <option value="Vue 3 / Vite + Tailwind">Vue 3 / Vite + Tailwind</option>
+                  <option value="React + Vite SPA">React + Vite SPA</option>
+                </select>
+              </div>
+
+              <!-- Selector 2: Ornamen Rumput -->
+              <div class="pixel-select-box">
+                <span class="pixel-select-label">ORNAMEN RUMPUT PULAU</span>
+                <select id="selectGrassOrnament" class="pixel-select" onchange="updatePromptBlueprint()">
+                  <option value="Lush Pixel Grass + Earth Base" selected>Lush Pixel Grass + Earth Base</option>
+                  <option value="Clean Office (No Grass/Dirt)">Clean Office (No Grass/Dirt)</option>
+                  <option value="Cyber Grid Wireframe">Cyber Grid Wireframe</option>
+                </select>
+              </div>
+
+              <!-- Selector 3: Intensitas Neon -->
+              <div class="pixel-select-box">
+                <span class="pixel-select-label">INTENSITAS NEON BIRU</span>
+                <select id="selectNeonIntensity" class="pixel-select" onchange="updatePromptBlueprint()">
+                  <option value="Bright Sky + High Cyan Glow (#00F0FF)" selected>Bright Sky + High Cyan Glow (#00F0FF)</option>
+                  <option value="Muted Sky Navy">Muted Sky Navy</option>
+                  <option value="Monochrome Cyberpunk">Monochrome Cyberpunk</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Prompt Box with Copy Button -->
+            <div class="prompt-blueprint-box">
+              <div class="prompt-blueprint-header">
+                <div class="prompt-blueprint-title" id="promptTitleLabel">
+                  PROMPT OPSI A (MODE FULL GAME)
+                </div>
+                <button class="pixel-btn pixel-btn-green" onclick="copyBlueprintPrompt()">
+                  ❐ COPY PROMPT
+                </button>
+              </div>
+
+              <pre class="prompt-blueprint-content" id="promptTextContent"></pre>
+            </div>
+          </div>
+          <div class="island-dirt-crust"></div>
+        </div>
+
+        <!-- SECONDARY FLOATING ISLAND: ZERO-TRUST CONTAINMENT & SYSTEM USERS -->
+        <div class="island-card" style="margin-top: 10px;">
+          <div class="island-grass-cap"></div>
+          <div class="island-header-bar">
+            <div class="island-header-title">
+              <span>🛡️</span>
+              <div>
+                <div>ZERO-TRUST CONTAINMENT &amp; SYSTEM USERS (/SETTINGS)</div>
+                <span class="island-header-sub">Dynamic iptables packet filtering &amp; role-based account management</span>
+              </div>
+            </div>
+            <div class="window-dots">
+              <div class="window-dot"></div>
+              <div class="window-dot"></div>
+              <div class="window-dot"></div>
+            </div>
+          </div>
+
+          <div class="island-body">
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
+              <!-- Left: iptables DROP containment -->
+              <div class="panel-subcard">
+                <div class="panel-subcard-title">
+                  <span>ACTIVE IPTABLES DROP CONTAINMENT</span>
+                  <span class="pixel-tag tag-critical" id="badgeBlockedCount">0 QUARANTINED</span>
+                </div>
+
+                <div style="overflow-x: auto; border: 1px solid #0F172A; margin-bottom: 12px;">
+                  <table class="pixel-table">
+                    <thead>
+                      <tr>
+                        <th>BLOCKED IP</th>
+                        <th>TARGET NODE</th>
+                        <th>REASON</th>
+                        <th>AKSI</th>
+                      </tr>
+                    </thead>
+                    <tbody id="containmentTableBody">
+                      <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 16px;">Tidak ada IP yang sedang diblokir.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Manual Block -->
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="manualBlockIpInput" class="pixel-select" placeholder="Masukkan IP yang ingin diblokir (misal: 192.168.1.100)">
+                  <button class="pixel-btn pixel-btn-danger" onclick="submitManualBlock()">
+                    DROP IP
+                  </button>
+                </div>
+              </div>
+
+              <!-- Right: User Management (Admin Only) -->
+              <div class="panel-subcard">
+                <div class="panel-subcard-title">
+                  <span>SISTEM USER &amp; REGISTRASI ANALIS</span>
+                </div>
+
+                <div id="userAdminSection">
+                  <p style="font-size: 11px; color: #64748B; margin-bottom: 10px;">
+                    Daftarkan akun analis SOC baru untuk mengakses dashboard web dan API Center SIEM.
+                  </p>
+                  <form id="formRegisterUser" onsubmit="handleCreateUser(event)" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                      <input type="text" id="regUsername" class="pixel-select" placeholder="Username analis..." required>
+                    </div>
+                    <div>
+                      <input type="password" id="regPassword" class="pixel-select" placeholder="Password minimal 6 karakter..." required>
+                    </div>
+                    <div>
+                      <select id="regRole" class="pixel-select">
+                        <option value="analyst">Role: Analyst (Read-only + Probe)</option>
+                        <option value="admin">Role: Administrator (Full Control)</option>
+                      </select>
+                    </div>
+                    <button type="submit" class="pixel-btn pixel-btn-cyan" style="width: 100%;">
+                      + REGISTRASI PENGGUNA
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="island-dirt-crust"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
