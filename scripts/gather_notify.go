@@ -78,6 +78,8 @@ func main() {
 	stateFlag := flag.String("state", "", "status state: off, on, alert, working")
 	msgFlag := flag.String("msg", "", "activity message text")
 	urlFlag := flag.String("url", "", "activity link URL")
+	countFlag := flag.Int("count", -1, "counter value (for inbox/counter objects)")
+	colorFlag := flag.String("color", "", "variant color (black, blue, green, red, yellow, etc)")
 	flag.Parse()
 
 	gatherURL := os.Getenv("GATHER_WEBHOOK_URL")
@@ -89,14 +91,43 @@ func main() {
 		gatherSecret = "whsec_Z2F00oMyO2+A2xPiYJYZy+jVE/jBLf8vAYTzS9pv7xE="
 	}
 
+	// 1. Tangani State / Warna (mendukung objek status dan objek inbox/variant)
 	if *stateFlag != "" {
-		if err := sendEvent(gatherURL, gatherSecret, "status.set", map[string]string{"state": *stateFlag}); err != nil {
-			fmt.Printf("[Gather] Error setting state: %v\n", err)
+		// Coba set status.set (untuk preset status)
+		_ = sendEvent(gatherURL, gatherSecret, "status.set", map[string]string{"state": *stateFlag})
+
+		// Map state ke warna variant (untuk preset inbox/counter)
+		variantColor := *colorFlag
+		if variantColor == "" {
+			switch *stateFlag {
+			case "on", "success":
+				variantColor = "green"
+			case "alert", "failure", "failed":
+				variantColor = "red"
+			case "working", "building":
+				variantColor = "yellow"
+			case "off":
+				variantColor = "black"
+			}
+		}
+		if variantColor != "" {
+			_ = sendEvent(gatherURL, gatherSecret, "variant.set", map[string]string{"color": variantColor})
+		}
+		fmt.Printf("[Gather] State '%s' (variant color: '%s') processed\n", *stateFlag, variantColor)
+	} else if *colorFlag != "" {
+		_ = sendEvent(gatherURL, gatherSecret, "variant.set", map[string]string{"color": *colorFlag})
+	}
+
+	// 2. Tangani Counter (bila ditentukan eksplisit)
+	if *countFlag >= 0 {
+		if err := sendEvent(gatherURL, gatherSecret, "counter.set", map[string]int{"count": *countFlag}); err != nil {
+			fmt.Printf("[Gather] Error setting counter: %v\n", err)
 		} else {
-			fmt.Printf("[Gather] State updated to '%s'\n", *stateFlag)
+			fmt.Printf("[Gather] Counter set to %d\n", *countFlag)
 		}
 	}
 
+	// 3. Tangani Pesan Aktivitas / Inbox Feed
 	if *msgFlag != "" {
 		link := *urlFlag
 		if link == "" {
@@ -111,6 +142,11 @@ func main() {
 			fmt.Printf("[Gather] Error adding activity: %v\n", err)
 		} else {
 			fmt.Printf("[Gather] Activity added: %s\n", *msgFlag)
+		}
+
+		// Tambahkan 1 tumpukan lembar kertas di inbox secara otomatis jika count tidak diset manual
+		if *countFlag < 0 {
+			_ = sendEvent(gatherURL, gatherSecret, "counter.increment", map[string]int{"by": 1})
 		}
 	}
 }
