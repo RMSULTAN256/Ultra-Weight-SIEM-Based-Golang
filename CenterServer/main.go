@@ -92,7 +92,7 @@ func main() {
 		},
 	}))
 
-	siemService := services.NewSIEMService()
+	siemService := services.NewSIEMService(dbService)
 	h := router.NewHandleSiem(siemService)
 
 	loginLimiter := limiter.New(limiter.Config{
@@ -175,7 +175,9 @@ func main() {
 
 	adminOnly := baseApi.Group("/", router.RequireRole("admin"))
 	adminOnly.Delete("/agents/:id", h.HandleDeleteAgent)
+	adminOnly.Get("/containment/blocked", h.HandleGetBlockedIPs)
 	adminOnly.Post("/containment/block", h.HandleBlockIP)
+	adminOnly.Post("/containment/unblock", h.HandleUnblockIP)
 	adminOnly.Post("/users", authHandler.HandleRegister)
 	adminOnly.Post("/agents/:id/exec", h.HandleRemoteExec)
 

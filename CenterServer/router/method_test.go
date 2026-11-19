@@ -27,6 +27,8 @@ func setupTestApp() (*fiber.App, *services.SIEMService) {
 	app.Get("/api/v1/logs", h.HandleGetLogs)
 	app.Get("/api/v1/agents", h.HandleGetAgents)
 	app.Post("/api/v1/containment/block", h.HandleBlockIP)
+	app.Post("/api/v1/containment/unblock", h.HandleUnblockIP)
+	app.Get("/api/v1/containment/blocked", h.HandleGetBlockedIPs)
 
 	return app, svc
 }
@@ -114,5 +116,50 @@ func TestRouter_LogsAndAgentsEndpoints(t *testing.T) {
 	agentResp, err := app.Test(agentReq)
 	if err != nil || agentResp.StatusCode != http.StatusOK {
 		t.Fatalf("Failed to get agents: %v", err)
+	}
+}
+
+func TestRouter_ContainmentEndpoints(t *testing.T) {
+	app, svc := setupTestApp()
+	svc.RecordIP("198.51.100.22", "ubuntu-test", "Access Log", "Critical")
+
+	// 1. Block IP
+	blockPayload := []byte(`{"ip":"198.51.100.22","node":"ubuntu-test","reason":"Brute Force Attack"}`)
+	bReq := httptest.NewRequest(http.MethodPost, "/api/v1/containment/block", bytes.NewReader(blockPayload))
+	bReq.Header.Set("Content-Type", "application/json")
+	bResp, err := app.Test(bReq)
+	if err != nil || bResp.StatusCode != http.StatusOK {
+		t.Fatalf("Block IP gagal: err=%v, code=%d", err, bResp.StatusCode)
+	}
+
+	// 2. Get Blocked IPs
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/containment/blocked", nil)
+	listResp, err := app.Test(listReq)
+	if err != nil || listResp.StatusCode != http.StatusOK {
+		t.Fatalf("Get Blocked IPs gagal: err=%v, code=%d", err, listResp.StatusCode)
+	}
+	var blockedList []map[string]interface{}
+	body, _ := io.ReadAll(listResp.Body)
+	_ = sonic.Unmarshal(body, &blockedList)
+	if len(blockedList) == 0 {
+		t.Fatalf("Harus ada IP di daftar blokir, tapi kosong")
+	}
+
+	// 3. Unblock IP
+	unblockPayload := []byte(`{"ip":"198.51.100.22"}`)
+	uReq := httptest.NewRequest(http.MethodPost, "/api/v1/containment/unblock", bytes.NewReader(unblockPayload))
+	uReq.Header.Set("Content-Type", "application/json")
+	uResp, err := app.Test(uReq)
+	if err != nil || uResp.StatusCode != http.StatusOK {
+		t.Fatalf("Unblock IP gagal: err=%v, code=%d", err, uResp.StatusCode)
+	}
+
+	// 4. Coba blokir Loopback IP (harus ditolak 403)
+	loopPayload := []byte(`{"ip":"127.0.0.1"}`)
+	lReq := httptest.NewRequest(http.MethodPost, "/api/v1/containment/block", bytes.NewReader(loopPayload))
+	lReq.Header.Set("Content-Type", "application/json")
+	lResp, err := app.Test(lReq)
+	if err != nil || lResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Blokir loopback seharusnya 403 Forbidden, dapat %d", lResp.StatusCode)
 	}
 }

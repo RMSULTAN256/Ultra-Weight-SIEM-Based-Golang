@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Deep Route Analytics | Pixel-Sky OS</title>
-  <link rel="stylesheet" href="/pixel-theme.css?v=2.1">
-  <script src="/pixel-layout.js?v=2.1"></script>
-  <script src="/status.js?v=2.1" defer></script>
+  <title>Cluster Fleet Hardware Nodes | CORP-SOC SIEM</title>
+  <link rel="stylesheet" href="/pixel-theme.css?v=2.8">
+  <script src="/pixel-layout.js?v=2.8"></script>
+  <script src="/status.js?v=2.8" defer></script>
 </head>
 <body>
   <div class="app-container">
@@ -29,19 +29,19 @@
         <!-- Active Route Strip -->
         <div id="active-route-strip"></div>
 
-        <!-- MAIN FLOATING ISLAND CARD: DEEP ROUTE ANALYTICS -->
+        <!-- MAIN FLOATING ISLAND: CLUSTER FLEET TELEMETRY & SSH DISPATCHER -->
         <div class="island-card">
           <div class="island-grass-cap"></div>
           <div class="island-header-bar">
             <div class="island-header-title">
-              <span style="font-size: 14px;">||</span>
+              <span>🖥️</span>
               <div>
-                <div>DEEP ROUTE ANALYTICS (/ANALYTICS)</div>
-                <span class="island-header-sub">Halaman khusus metrik yang sudah dipisah dari /dashboard utama</span>
+                <div>CLUSTER FLEET HARDWARE NODES (/ANALYTICS)</div>
+                <span class="island-header-sub">Status detak agen, probe latensi RTT, utilitas resource, dan remote SSH</span>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="mini-kpi-badge" style="background: #00F0FF; color: #0F172A; font-weight: 700;">SEPARATED PATH</span>
+              <button class="pixel-btn pixel-btn-sm pixel-btn-green" onclick="loadFleetNodes()">⟳ REFRESH</button>
               <div class="window-dots">
                 <div class="window-dot"></div>
                 <div class="window-dot"></div>
@@ -51,81 +51,7 @@
           </div>
 
           <div class="island-body">
-            <div class="deep-analytics-grid">
-              <!-- Left Column: PERBANDINGAN BEBAN TIAP ENDPOINT ROUTE -->
-              <div class="panel-subcard">
-                <div class="panel-subcard-title">
-                  <span>PERBANDINGAN BEBAN TIAP ENDPOINT ROUTE</span>
-                  <button class="pixel-btn pixel-btn-sm" onclick="loadFleetNodes()">⟳ REFRESH</button>
-                </div>
-
-                <div class="route-load-list" id="routeLoadList">
-                  <!-- Rendered dynamically by status.js -->
-                  <div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 20px;">
-                    Memuat data beban endpoint dan node...
-                  </div>
-                </div>
-              </div>
-
-              <!-- Right Column: KEUNTUNGAN STRUKTUR MULTI-PATH BARU -->
-              <div class="panel-subcard">
-                <div class="panel-subcard-title">
-                  <span>KEUNTUNGAN STRUKTUR MULTI-PATH BARU</span>
-                </div>
-
-                <div class="benefits-list">
-                  <div class="benefit-item">
-                    <span class="benefit-num">1</span>
-                    <div class="benefit-text">
-                      <strong>Lazy Loading per Halaman:</strong> Grafik berat di /analytics tidak membebani initial load di /dashboard.
-                    </div>
-                  </div>
-
-                  <div class="benefit-item">
-                    <span class="benefit-num benefit-num-cyan">2</span>
-                    <div class="benefit-text">
-                      <strong>URL Bisa Di-bookmark:</strong> Tim kantor bisa langsung share link /logs atau /analytics tanpa mental ke tab awal.
-                    </div>
-                  </div>
-
-                  <div class="benefit-item">
-                    <span class="benefit-num benefit-num-amber">3</span>
-                    <div class="benefit-text">
-                      <strong>Middleware Spesifik:</strong> Route sensitif seperti /settings bisa dikasih guard terpisah.
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Wide Return Button -->
-                <button class="btn-wide-return" onclick="window.location.href='/dashboard'">
-                  KEMBALI KE /dashboard
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="island-dirt-crust"></div>
-        </div>
-
-        <!-- SECONDARY FLOATING ISLAND: CLUSTER FLEET TELEMETRY & SSH DISPATCHER -->
-        <div class="island-card" style="margin-top: 10px;">
-          <div class="island-grass-cap"></div>
-          <div class="island-header-bar">
-            <div class="island-header-title">
-              <span>🖥️</span>
-              <div>
-                <div>CLUSTER FLEET HARDWARE NODES</div>
-                <span class="island-header-sub">Status detak agen, probe latensi RTT, dan eksekusi remote shell</span>
-              </div>
-            </div>
-            <div class="window-dots">
-              <div class="window-dot"></div>
-              <div class="window-dot"></div>
-              <div class="window-dot"></div>
-            </div>
-          </div>
-
-          <div class="island-body">
-            <div id="fleetGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+            <div id="fleetGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
               <div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 24px; grid-column: 1 / -1;">
                 Memuat data telemetri armada...
               </div>

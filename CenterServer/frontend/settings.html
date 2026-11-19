@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings &amp; Blueprint | Pixel-Sky OS</title>
-  <link rel="stylesheet" href="/pixel-theme.css?v=2.1">
-  <script src="/pixel-layout.js?v=2.1"></script>
-  <script src="/settings.js?v=2.1" defer></script>
+  <title>System Settings | CORP-SOC SIEM</title>
+  <link rel="stylesheet" href="/pixel-theme.css?v=2.8">
+  <script src="/pixel-layout.js?v=2.8"></script>
+  <script src="/settings.js?v=2.8" defer></script>
 </head>
 <body>
   <div class="app-container">
@@ -29,81 +29,8 @@
         <!-- Active Route Strip -->
         <div id="active-route-strip"></div>
 
-        <!-- MAIN FLOATING ISLAND CARD: PROMPT & BLUEPRINT ARSITEKTUR (IMAGE 5) -->
+        <!-- MAIN FLOATING ISLAND: ZERO-TRUST CONTAINMENT & SYSTEM USERS -->
         <div class="island-card">
-          <div class="island-grass-cap"></div>
-          <div class="island-header-bar">
-            <div class="island-header-title">
-              <span style="font-size: 14px;">&gt;</span>
-              <div>
-                <div>OPSI A: PROMPT &amp; BLUEPRINT ARSITEKTUR (/SETTINGS)</div>
-                <span class="island-header-sub">Otomatis menyesuaikan antara Mode Kantor vs Mode Full Game</span>
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="mini-kpi-badge" id="badgeGameMode" style="background: #00F0FF; color: #0F172A; font-weight: 700;">VERSI PULAU GAME</span>
-              <div class="window-dots">
-                <div class="window-dot"></div>
-                <div class="window-dot"></div>
-                <div class="window-dot"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="island-body">
-            <!-- 3 Dropdown Selectors Grid (Image 5) -->
-            <div class="settings-selectors-grid">
-              <!-- Selector 1: Target Stack -->
-              <div class="pixel-select-box">
-                <span class="pixel-select-label">TARGET STACK / FRAMEWORK</span>
-                <select id="selectTargetStack" class="pixel-select" onchange="updatePromptBlueprint()">
-                  <option value="Next.js / Laravel Inertia" selected>Next.js / Laravel Inertia</option>
-                  <option value="Golang Native + Vanilla HTML/JS">Golang Native + Vanilla HTML/JS</option>
-                  <option value="Vue 3 / Vite + Tailwind">Vue 3 / Vite + Tailwind</option>
-                  <option value="React + Vite SPA">React + Vite SPA</option>
-                </select>
-              </div>
-
-              <!-- Selector 2: Ornamen Rumput -->
-              <div class="pixel-select-box">
-                <span class="pixel-select-label">ORNAMEN RUMPUT PULAU</span>
-                <select id="selectGrassOrnament" class="pixel-select" onchange="updatePromptBlueprint()">
-                  <option value="Lush Pixel Grass + Earth Base" selected>Lush Pixel Grass + Earth Base</option>
-                  <option value="Clean Office (No Grass/Dirt)">Clean Office (No Grass/Dirt)</option>
-                  <option value="Cyber Grid Wireframe">Cyber Grid Wireframe</option>
-                </select>
-              </div>
-
-              <!-- Selector 3: Intensitas Neon -->
-              <div class="pixel-select-box">
-                <span class="pixel-select-label">INTENSITAS NEON BIRU</span>
-                <select id="selectNeonIntensity" class="pixel-select" onchange="updatePromptBlueprint()">
-                  <option value="Bright Sky + High Cyan Glow (#00F0FF)" selected>Bright Sky + High Cyan Glow (#00F0FF)</option>
-                  <option value="Muted Sky Navy">Muted Sky Navy</option>
-                  <option value="Monochrome Cyberpunk">Monochrome Cyberpunk</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Prompt Box with Copy Button -->
-            <div class="prompt-blueprint-box">
-              <div class="prompt-blueprint-header">
-                <div class="prompt-blueprint-title" id="promptTitleLabel">
-                  PROMPT OPSI A (MODE FULL GAME)
-                </div>
-                <button class="pixel-btn pixel-btn-green" onclick="copyBlueprintPrompt()">
-                  ❐ COPY PROMPT
-                </button>
-              </div>
-
-              <pre class="prompt-blueprint-content" id="promptTextContent"></pre>
-            </div>
-          </div>
-          <div class="island-dirt-crust"></div>
-        </div>
-
-        <!-- SECONDARY FLOATING ISLAND: ZERO-TRUST CONTAINMENT & SYSTEM USERS -->
-        <div class="island-card" style="margin-top: 10px;">
           <div class="island-grass-cap"></div>
           <div class="island-header-bar">
             <div class="island-header-title">
@@ -113,10 +40,13 @@
                 <span class="island-header-sub">Dynamic iptables packet filtering &amp; role-based account management</span>
               </div>
             </div>
-            <div class="window-dots">
-              <div class="window-dot"></div>
-              <div class="window-dot"></div>
-              <div class="window-dot"></div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="pixel-btn pixel-btn-sm pixel-btn-green" onclick="loadBlockedIps()">⟳ REFRESH</button>
+              <div class="window-dots">
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+              </div>
             </div>
           </div>
 
@@ -187,6 +117,11 @@
           </div>
           <div class="island-dirt-crust"></div>
         </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
       </main>
     </div>
   </div>

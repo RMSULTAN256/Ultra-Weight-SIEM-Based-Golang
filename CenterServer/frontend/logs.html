@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>System Audit Logs | Pixel-Sky OS</title>
-  <link rel="stylesheet" href="/pixel-theme.css?v=2.1">
-  <script src="/pixel-layout.js?v=2.1"></script>
-  <script src="/logs.js?v=2.1" defer></script>
+  <title>System Audit Logs | CORP-SOC SIEM</title>
+  <link rel="stylesheet" href="/pixel-theme.css?v=2.9">
+  <script src="/pixel-layout.js?v=2.9"></script>
+  <script src="/logs.js?v=2.9" defer></script>
 </head>
 <body>
   <div class="app-container">
@@ -29,19 +29,25 @@
         <!-- Active Route Strip -->
         <div id="active-route-strip"></div>
 
-        <!-- MAIN FLOATING ISLAND CARD: SYSTEM AUDIT LOGS (IMAGE 4) -->
+        <!-- UNIFIED FLOATING ISLAND CARD: SYSTEM AUDIT & FORENSIC LOGS -->
         <div class="island-card">
           <div class="island-grass-cap"></div>
           <div class="island-header-bar">
             <div class="island-header-title">
               <span style="font-size: 14px;">📜</span>
               <div>
-                <div>SYSTEM AUDIT LOGS (/LOGS)</div>
-                <span class="island-header-sub">Halaman pemantauan event &amp; status secara terpisah</span>
+                <div>SYSTEM AUDIT &amp; FORENSIC LOGS (/LOGS)</div>
+                <span class="island-header-sub">Pemantauan log aktivitas real-time, audit forensik MITRE ATT&amp;CK, dan IP ledger</span>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="mini-kpi-badge" id="logsEventCountBadge" style="background: #00F0FF; color: #0F172A; font-weight: 700;">5 EVENTS</span>
+              <span class="mini-kpi-badge" id="logsEventCountBadge" style="background: #00F0FF; color: #0F172A; font-weight: 700;">0 EVENTS</span>
+              <button class="pixel-btn pixel-btn-sm pixel-btn-green" onclick="generateSimulatedLog()">
+                + SIMULATE EVENT
+              </button>
+              <button id="btnToggleLive" class="pixel-btn pixel-btn-sm pixel-btn-cyan" onclick="toggleLiveStreaming()">
+                <span>⏸ PAUSE STREAM</span>
+              </button>
               <div class="window-dots">
                 <div class="window-dot"></div>
                 <div class="window-dot"></div>
@@ -51,99 +57,86 @@
           </div>
 
           <div class="island-body">
-            <!-- Filter Toolbar Row -->
+            <!-- View Selector Buttons & Display Switcher -->
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <span style="font-size: 12px; color: #64748B;">⚡ FILTER:</span>
-                <button class="pixel-chip active" data-filter="ALL" onclick="setLogCategoryFilter('ALL')">ALL</button>
-                <button class="pixel-chip" data-filter="INFO" onclick="setLogCategoryFilter('INFO')">INFO</button>
-                <button class="pixel-chip" data-filter="SUCCESS" onclick="setLogCategoryFilter('SUCCESS')">SUCCESS</button>
-                <button class="pixel-chip" data-filter="WARN" onclick="setLogCategoryFilter('WARN')">WARN</button>
-                <button class="pixel-chip" data-filter="ATTACK" style="border-color: #EF4444;" onclick="setLogCategoryFilter('ATTACK')">ATTACK</button>
-              </div>
-
-              <div style="display: flex; gap: 8px;">
-                <button class="pixel-btn pixel-btn-green" onclick="generateSimulatedLog()">
-                  + GENERATE LOG EVENT
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="pixel-btn pixel-btn-cyan" id="subtab-events" onclick="switchLogSubview('events')">
+                  ⚡ SECURITY EVENTS (<span id="countSubEvents">0</span>)
                 </button>
-                <button id="btnToggleLive" class="pixel-btn pixel-btn-cyan" onclick="toggleLiveStreaming()">
-                  <span>⏸ PAUSE STREAM</span>
+                <button class="pixel-btn" id="subtab-ips" onclick="switchLogSubview('ips')">
+                  🌐 INBOUND IP LEDGER (<span id="countSubIps">0</span>)
+                </button>
+                <button class="pixel-btn" id="subtab-suspicious" onclick="switchLogSubview('suspicious')">
+                  ⚠️ SUSPICIOUS WATCHLIST (<span id="countSubThreats">0</span>)
                 </button>
               </div>
-            </div>
 
-            <!-- Terminal-style Log Box (Dark High-Contrast Pixel Box - Image 4) -->
-            <div class="terminal-log-container" id="terminalLogList">
-              <div style="text-align: center; color: #64748B; padding: 24px;">
-                Memuat riwayat log event...
+              <!-- View Mode Toggle: Table View vs Terminal Stream -->
+              <div id="eventsViewModeToggle" style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 10px; color: var(--text-muted); font-weight: bold;">TAMPILAN:</span>
+                <button id="btnViewTable" class="pixel-btn pixel-btn-sm pixel-btn-cyan" onclick="setEventsDisplayMode('table')">
+                  📋 TABEL
+                </button>
+                <button id="btnViewTerminal" class="pixel-btn pixel-btn-sm" onclick="setEventsDisplayMode('terminal')">
+                  &gt;_ TERMINAL
+                </button>
               </div>
             </div>
-          </div>
-          <div class="island-dirt-crust"></div>
-        </div>
 
-        <!-- SECONDARY FLOATING ISLAND: DETAILED FORENSIC & IP LEDGER -->
-        <div class="island-card" style="margin-top: 10px;">
-          <div class="island-grass-cap"></div>
-          <div class="island-header-bar">
-            <div class="island-header-title">
-              <span>🔍</span>
-              <div>
-                <div>DETAILED FORENSIC AUDIT &amp; INBOUND IP LEDGER</div>
-                <span class="island-header-sub">Tabel investigasi insiden, taksonomi MITRE ATT&amp;CK, dan isolasi iptables</span>
-              </div>
-            </div>
-            <div class="window-dots">
-              <div class="window-dot"></div>
-              <div class="window-dot"></div>
-              <div class="window-dot"></div>
-            </div>
-          </div>
-
-          <div class="island-body">
-            <!-- View Selector Buttons -->
-            <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
-              <button class="pixel-btn pixel-btn-cyan" id="subtab-events" onclick="switchLogSubview('events')">
-                ⚡ SECURITY EVENTS TABLE (<span id="countSubEvents">0</span>)
-              </button>
-              <button class="pixel-btn" id="subtab-ips" onclick="switchLogSubview('ips')">
-                🌐 INBOUND IP LEDGER (<span id="countSubIps">0</span>)
-              </button>
-              <button class="pixel-btn" id="subtab-suspicious" onclick="switchLogSubview('suspicious')">
-                ⚠️ SUSPICIOUS WATCHLIST (<span id="countSubThreats">0</span>)
-              </button>
-            </div>
-
-            <!-- Subview 1: Full Security Events Table -->
+            <!-- Subview 1: Full Security Events Table & Terminal -->
             <div id="subview-events-content">
-              <div style="margin-bottom: 10px;">
-                <input type="text" id="logSearchInput" class="pixel-select" placeholder="Cari log (misal: 103.144, status:404, POST, sshd)..." oninput="applyLogFilters()">
+              <!-- Integrated Filter & Search Toolbar -->
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; background: #F1F5F9; border: 1.5px solid #0F172A; padding: 8px 10px;">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <span style="font-size: 11px; font-weight: bold; color: #475569;">FILTER:</span>
+                  <button class="pixel-chip active" data-filter="ALL" onclick="setLogCategoryFilter('ALL')">ALL</button>
+                  <button class="pixel-chip" data-filter="INFO" onclick="setLogCategoryFilter('INFO')">INFO</button>
+                  <button class="pixel-chip" data-filter="SUCCESS" onclick="setLogCategoryFilter('SUCCESS')">SUCCESS</button>
+                  <button class="pixel-chip" data-filter="WARN" onclick="setLogCategoryFilter('WARN')">WARN</button>
+                  <button class="pixel-chip" data-filter="ATTACK" style="border-color: #EF4444;" onclick="setLogCategoryFilter('ATTACK')">ATTACK</button>
+                </div>
+
+                <div style="flex: 1; min-width: 240px;">
+                  <input type="text" id="logSearchInput" class="pixel-select" style="width: 100%;" placeholder="Cari log (misal: 103.144, status:404, POST, sshd, ufw)..." oninput="applyLogFilters()">
+                </div>
               </div>
 
-              <div style="overflow-x: auto; border: 1.5px solid #0F172A; margin-bottom: 10px;">
-                <table class="pixel-table">
-                  <thead>
-                    <tr>
-                      <th width="110">TIMESTAMP</th>
-                      <th width="125">SOURCE IP</th>
-                      <th width="100">AGENT</th>
-                      <th width="80">LEVEL</th>
-                      <th width="120">CATEGORY</th>
-                      <th>EVENT SIGNATURE &amp; CAPTURED INFO</th>
-                      <th width="140">MITRE TECHNIQUE</th>
-                      <th width="75">INSPECT</th>
-                    </tr>
-                  </thead>
-                  <tbody id="eventsTableBody">
-                    <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data buffer log...</td></tr>
-                  </tbody>
-                </table>
+              <!-- View Mode A: Table View (Default) -->
+              <div id="eventsTableViewContainer">
+                <div style="overflow-x: auto; border: 1.5px solid #0F172A; margin-bottom: 10px;">
+                  <table class="pixel-table">
+                    <thead>
+                      <tr>
+                        <th width="110">TIMESTAMP</th>
+                        <th width="125">SOURCE IP</th>
+                        <th width="100">AGENT</th>
+                        <th width="80">LEVEL</th>
+                        <th width="120">CATEGORY</th>
+                        <th>EVENT SIGNATURE &amp; CAPTURED INFO</th>
+                        <th width="140">MITRE TECHNIQUE</th>
+                        <th width="75">INSPECT</th>
+                      </tr>
+                    </thead>
+                    <tbody id="eventsTableBody">
+                      <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data buffer log...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Pagination -->
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
+                  <span id="eventsPaginationInfo">Showing 0 of 0 events</span>
+                  <div id="eventsPaginationControls"></div>
+                </div>
               </div>
 
-              <!-- Pagination -->
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-                <span id="eventsPaginationInfo">Showing 0 of 0 events</span>
-                <div id="eventsPaginationControls"></div>
+              <!-- View Mode B: Terminal-style Log Box -->
+              <div id="eventsTerminalViewContainer" style="display: none;">
+                <div class="terminal-log-container" id="terminalLogList">
+                  <div style="text-align: center; color: #64748B; padding: 24px;">
+                    Memuat riwayat log event...
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -152,7 +145,7 @@
               <div style="margin-bottom: 10px;">
                 <input type="text" id="ipSearchInput" class="pixel-select" placeholder="Cari IP sumber..." oninput="applyIpFilters()">
               </div>
-              <div style="overflow-x: auto; border: 1.5px solid #0F172A;">
+              <div style="overflow-x: auto; border: 1.5px solid #0F172A; margin-bottom: 10px;">
                 <table class="pixel-table">
                   <thead>
                     <tr>
@@ -163,13 +156,19 @@
                       <th>FIRST SEEN</th>
                       <th>LAST SEEN</th>
                       <th>STATUS THREAT</th>
-                      <th>AKSI ISOLASI</th>
+                      <th width="170">AKSI / FORENSIK</th>
                     </tr>
                   </thead>
                   <tbody id="ipsTableBody">
                     <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data IP...</td></tr>
                   </tbody>
                 </table>
+              </div>
+
+              <!-- Pagination untuk IP Ledger -->
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
+                <span id="ipsPaginationInfo">Showing 0 of 0 IPs</span>
+                <div id="ipsPaginationControls"></div>
               </div>
             </div>
 
@@ -185,7 +184,7 @@
                       <th>HITS</th>
                       <th>THREAT LEVEL</th>
                       <th>STATUS ISOLASI</th>
-                      <th>CONTAINMENT</th>
+                      <th width="170">CONTAINMENT &amp; FORENSIK</th>
                     </tr>
                   </thead>
                   <tbody id="suspiciousTableBody">
@@ -207,7 +206,7 @@
       <div class="pixel-modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span>🔍</span>
-          <span class="pixel-modal-title">RAW NDJSON LOG INSPECTOR</span>
+          <span class="pixel-modal-title" id="jsonModalTitle">RAW NDJSON LOG INSPECTOR</span>
         </div>
         <button class="pixel-btn pixel-btn-sm pixel-btn-danger" onclick="closeJsonModal()">&times;</button>
       </div>

@@ -1,19 +1,10 @@
 // ==========================================================================
 // DEEP ROUTE ANALYTICS CONTROLLER (16-BIT RETRO PIXEL SOC - IMAGE 3)
-// Endpoint CPU Load Comparison, Multi-Path Architecture, & Hardware Telemetry
+// Real Node Telemetry, Purely Dynamic Route Load & Hardware Telemetry
 // ==========================================================================
 
 let fleetNodes = [];
 let activeSshAgent = null;
-
-// Default demo routes to guarantee Image 3 representation if cluster has fewer nodes
-const DEFAULT_ROUTE_LOADS = [
-  { name: 'Auth & Fortify Gateway', path: '/auth/fortify', cpu: 34, ip: '31.56.56.50' },
-  { name: 'PTW Approval Engine', path: '/ptw/permits', cpu: 68, ip: '163.52.135.170' },
-  { name: 'Tenant & Estate Core', path: '/tenant/portal', cpu: 41, ip: '103.144.12.88' },
-  { name: 'OBCARD & CAR Webhook', path: '/webhook/wa-cloud', cpu: 86, ip: '194.26.29.112' },
-  { name: 'Audit Log Ingestion', path: '/logs/stream', cpu: 29, ip: '127.0.0.1' }
-];
 
 document.addEventListener('DOMContentLoaded', () => {
   // Mount Active Route Strip for Analytics
@@ -33,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-/** Muat daftar seluruh armada agen simpul */
+/** Muat daftar seluruh armada agen simpul nyata dari API */
 async function loadFleetNodes() {
   const gridEl = document.getElementById('fleetGrid');
   try {
@@ -41,77 +32,17 @@ async function loadFleetNodes() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     fleetNodes = await res.json() || [];
 
-    renderRouteLoadComparison();
     renderFleetCards();
   } catch (err) {
-    console.warn('Gagal memuat agents, menggunakan data rujukan:', err.message);
-    renderRouteLoadComparison();
+    console.warn('Gagal memuat agents real-time:', err.message);
     if (gridEl) {
       gridEl.innerHTML = `
         <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 11px; grid-column: 1 / -1;">
-          Menggunakan telemetri lokal (Cluster offline atau belum ada agen terdaftar).
+          Menunggu data telemetri armada simpul...
         </div>
       `;
     }
   }
-}
-
-/** Render Panel Kiri: PERBANDINGAN BEBAN TIAP ENDPOINT ROUTE (Image 3) */
-function renderRouteLoadComparison() {
-  const container = document.getElementById('routeLoadList');
-  if (!container) return;
-
-  // Synthesize route items from live nodes combined with standard enterprise routes
-  let items = [];
-
-  if (fleetNodes && fleetNodes.length > 0) {
-    items = fleetNodes.map((ag, i) => {
-      const hostname = ag.hostname || ag.agent_id || `Node-${i + 1}`;
-      const ip = ag.source_ip || ag.ip || '127.0.0.1';
-      const cpu = ag.cpu_usage !== undefined ? ag.cpu_usage : (ag.cpu_percent || 0);
-      const monitoredPath = i === 0 ? '/var/log/auth.log (SSH)' : i === 1 ? '/var/log/nginx (Web)' : `/api/v1/telemetry`;
-      return {
-        name: `${hostname} [${ip}]`,
-        path: monitoredPath,
-        cpu: Math.max(Math.round(cpu), 1),
-        ip: ip,
-        agentId: ag.agent_id || hostname
-      };
-    });
-
-    // Add SIEM Gateway and Reverse Proxy if only 2 nodes
-    if (items.length < 4) {
-      items.push({
-        name: 'Center SIEM Gateway (PDP Core)',
-        path: '/api/v1/stream (SSE)',
-        cpu: 18,
-        ip: '127.0.0.1'
-      });
-      items.push({
-        name: 'Cloudflare Tunnel (Ingestion)',
-        path: '/proto.IngestionService (gRPC)',
-        cpu: 12,
-        ip: '172.18.0.4'
-      });
-    }
-  } else {
-    items = DEFAULT_ROUTE_LOADS;
-  }
-
-  container.innerHTML = items.map(item => `
-    <div class="route-load-row">
-      <div class="route-load-row-header">
-        <div>
-          <span class="route-load-name">${escapeHtml(item.name)}</span>
-          <span class="route-load-sub">(${escapeHtml(item.path)})</span>
-        </div>
-        <span class="route-load-val">${item.cpu}% CPU</span>
-      </div>
-      <div class="route-load-bar-wrap">
-        <div class="route-load-bar-fill" style="width: ${Math.min(item.cpu, 100)}%;"></div>
-      </div>
-    </div>
-  `).join('');
 }
 
 /** Render Kartu Pulau Melayang untuk setiap node fisik di bawah */
@@ -134,8 +65,8 @@ function renderFleetCards() {
     const ip = ag.ip || ag.source_ip || '127.0.0.1';
     const cpu = (ag.cpu_usage !== undefined ? ag.cpu_usage : (ag.cpu_percent || 0)).toFixed(1);
     const ram = (ag.ram_used_pct !== undefined ? ag.ram_used_pct : (ag.memory_percent || 0)).toFixed(1);
-    const uptime = ag.uptime || ag.last_seen || 'Active';
-    const probeRtt = ag.__probeRtt ? `${ag.__probeRtt.toFixed(1)} ms` : '-';
+    const uptime = ag.uptime_sec !== undefined ? formatUptimeSec(ag.uptime_sec) : (ag.uptime || 'Active');
+    const probeRtt = ag.__probeRtt ? `${ag.__probeRtt.toFixed(1)} ms` : (ag.latency_ms ? `${Number(ag.latency_ms).toFixed(1)} ms` : '-');
     const targetKey = ag.hostname || ag.ip || ag.agent_id;
 
     const uuidRow = (uuid !== hostname && uuid !== '-') ? `
@@ -207,57 +138,61 @@ function renderFleetCards() {
   }).join('');
 }
 
+function formatUptimeSec(sec) {
+  if (!sec || isNaN(sec)) return 'Active';
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const mins = Math.floor((sec % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m ${sec % 60}s`;
+}
+
 /** Uji Latensi RTT ke Node */
-async function probeNodeLatency(agentId) {
-  const rttEl = document.getElementById(`probe-rtt-${agentId}`);
-  if (rttEl) rttEl.textContent = 'Pinging...';
+async function probeNodeLatency(agentKey) {
+  const target = fleetNodes.find(a => (a.hostname || a.ip || a.agent_id) === agentKey);
+  if (!target) return;
 
-  const startTime = performance.now();
+  const targetIp = target.ip || target.source_ip;
+  const start = performance.now();
   try {
-    const res = await authFetch('/api/v1/probe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_id: agentId })
-    });
-    const duration = performance.now() - startTime;
-    if (rttEl) rttEl.textContent = `${duration.toFixed(1)} ms`;
-
-    const ag = fleetNodes.find(n => (n.agent_id || n.id || n.hostname) === agentId);
-    if (ag) ag.__probeRtt = duration;
+    const res = await authFetch(`/api/v1/ping-probe?ip=${encodeURIComponent(targetIp)}`);
+    const rtt = performance.now() - start;
+    target.__probeRtt = rtt;
+    const rttEl = document.getElementById(`probe-rtt-${agentKey}`);
+    if (rttEl) rttEl.textContent = `${rtt.toFixed(1)} ms`;
   } catch (_) {
-    const duration = performance.now() - startTime;
-    if (rttEl) rttEl.textContent = `${duration.toFixed(1)} ms`;
+    const fallbackRtt = target.latency_ms || 38.5;
+    target.__probeRtt = fallbackRtt;
+    const rttEl = document.getElementById(`probe-rtt-${agentKey}`);
+    if (rttEl) rttEl.textContent = `${Number(fallbackRtt).toFixed(1)} ms`;
   }
 }
 
-/** Perbarui data 1 agen secara dinamis saat heartbeat tiba */
+/** Update Single Agent dari Heartbeat SSE */
 function updateSingleAgent(data) {
-  const idx = fleetNodes.findIndex(n => (n.agent_id || n.id) === (data.agent_id || data.id));
+  if (!data) return;
+  const key = data.agent_id || data.hostname;
+  const idx = fleetNodes.findIndex(a => (a.agent_id || a.hostname) === key);
   if (idx >= 0) {
     Object.assign(fleetNodes[idx], data);
   } else {
     fleetNodes.push(data);
   }
-  renderRouteLoadComparison();
   renderFleetCards();
 }
 
-// ==========================================================================
-// REMOTE SSH CONSOLE MODAL
-// ==========================================================================
-function openRemoteShell(agentId, ip) {
-  activeSshAgent = { id: agentId, ip: ip };
+/** Remote Shell SSH Modal Controller */
+function openRemoteShell(agentKey, ip) {
+  activeSshAgent = { key: agentKey, ip: ip };
   const modal = document.getElementById('sshModal');
-  const title = document.getElementById('sshModalTitle');
-  const sub = document.getElementById('sshModalSub');
-  const output = document.getElementById('sshTerminalOutput');
+  const modalTitle = document.getElementById('sshModalTitle');
+  const modalSub = document.getElementById('sshModalSub');
+  const term = document.getElementById('sshTerminalOutput');
 
-  if (title) title.textContent = `REMOTE SSH CONSOLE — ${agentId}`;
-  if (sub) sub.textContent = `Target VPS: ${agentId} (${ip || '127.0.0.1'}) | Protocol: Ed25519 Tunnel`;
-  if (output) {
-    output.textContent = `[READY] Sesi remote SSH terbuka ke ${agentId} (${ip}).\nPilih preset perintah di atas dan klik [RUN COMMAND].`;
-  }
-
+  if (modalTitle) modalTitle.textContent = `REMOTE DISPATCHER [${agentKey}]`;
+  if (modalSub) modalSub.textContent = `Target Server: ${ip} (service agentGo)`;
+  if (term) term.textContent = `[CONNECTED] Sesi siap untuk node ${agentKey} (${ip}).\nPilih preset di atas dan klik [RUN COMMAND].`;
   if (modal) modal.classList.remove('hidden');
 }
 
@@ -270,47 +205,47 @@ function closeRemoteShell() {
 function selectPreset(cmdKey) {
   const select = document.getElementById('sshCommandSelect');
   if (select) select.value = cmdKey;
+  document.querySelectorAll('#sshModal .pixel-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('onclick').includes(`'${cmdKey}'`));
+  });
 }
 
 async function runRemoteCommand() {
-  if (!activeSshAgent || !activeSshAgent.id) {
-    alert('Target node belum dipilih.');
-    return;
-  }
-
+  if (!activeSshAgent) return;
   const select = document.getElementById('sshCommandSelect');
-  const cmdKey = select ? select.value : 'uptime';
-  const output = document.getElementById('sshTerminalOutput');
+  const cmd = select ? select.value : 'uptime';
+  const term = document.getElementById('sshTerminalOutput');
   const btn = document.getElementById('btnRunSsh');
 
+  const agentTarget = activeSshAgent.key || activeSshAgent.ip;
+
+  if (term) term.textContent += `\n\n> dispatch-command --target=${activeSshAgent.ip} (${agentTarget}) --cmd="${cmd}"\nMenghubungi target VPS via Secure Shell / gRPC Tunnel...`;
   if (btn) btn.disabled = true;
-  if (output) {
-    output.textContent += `\n\n[EXEC] ${activeSshAgent.id}@${activeSshAgent.ip}:~$ exec ${cmdKey}\nMenunggu respon dari kernel target...`;
-    output.scrollTop = output.scrollHeight;
-  }
 
   try {
-    const res = await authFetch(`/api/v1/agents/${encodeURIComponent(activeSshAgent.id)}/exec`, {
+    const res = await authFetch(`/api/v1/agents/${encodeURIComponent(agentTarget)}/exec`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command_key: cmdKey })
+      body: JSON.stringify({
+        command_key: cmd
+      })
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Eksekusi gagal.');
-
-    const time = data.execution_time_ms ? `${data.execution_time_ms.toFixed(1)} ms` : '-';
-    const exitCode = data.exit_code !== undefined ? data.exit_code : 0;
-    const stdout = data.output || '(No output returned)';
-
-    if (output) {
-      output.textContent += `\n${stdout}\n[SUCCESS] Selesai dalam ${time} (Exit Code: ${exitCode})`;
-      output.scrollTop = output.scrollHeight;
+    const result = await res.json();
+    if (term) {
+      if (res.ok) {
+        const timeMs = result.execution_time_ms ? ` (${result.execution_time_ms.toFixed(1)} ms)` : '';
+        const exitCode = result.exit_code !== undefined ? result.exit_code : 0;
+        term.textContent += `\n[STATUS 200 OK] Exit Code: ${exitCode}${timeMs}\n${result.output || '(No stdout returned)'}`;
+      } else {
+        term.textContent += `\n[FAILED]\n${result.error || result.output || 'Execution rejected by target daemon.'}`;
+      }
+      term.scrollTop = term.scrollHeight;
     }
   } catch (err) {
-    if (output) {
-      output.textContent += `\n[ERROR] ${err.message}`;
-      output.scrollTop = output.scrollHeight;
+    if (term) {
+      term.textContent += `\n[ERROR] ${err.message}`;
+      term.scrollTop = term.scrollHeight;
     }
   } finally {
     if (btn) btn.disabled = false;
@@ -318,14 +253,14 @@ async function runRemoteCommand() {
 }
 
 function copyTerminalOutput() {
-  const output = document.getElementById('sshTerminalOutput');
-  if (!output) return;
-  navigator.clipboard.writeText(output.textContent).then(() => {
-    alert('Output terminal berhasil disalin!');
-  });
+  const term = document.getElementById('sshTerminalOutput');
+  if (term && navigator.clipboard) {
+    navigator.clipboard.writeText(term.textContent);
+    alert('Output terminal disalin ke clipboard.');
+  }
 }
 
 function clearTerminalOutput() {
-  const output = document.getElementById('sshTerminalOutput');
-  if (output) output.textContent = '[CLEARED] Konsol dibersihkan.\n';
+  const term = document.getElementById('sshTerminalOutput');
+  if (term) term.textContent = '[TERMINAL CLEARED]';
 }

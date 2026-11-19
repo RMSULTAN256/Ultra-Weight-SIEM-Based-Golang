@@ -303,6 +303,111 @@ func (s *GRPCServer) ExecuteCommandViaGRPC(targetID, cmdKey string, timeout time
 	}
 }
 
+// DispatchContainment mengirimkan perintah aksi iptables (block_ip atau unblock_ip)
+// ke simpul agen PEP yang dituju, atau membroadcast ke seluruh agen PEP aktif di cluster.
+func (s *GRPCServer) DispatchContainment(targetNode, action, targetIP, reason string, timeout time.Duration) (map[string]string, error) {
+	SecretKey := os.Getenv("AGENT_API_KEY")
+	if SecretKey == "" {
+		return nil, errors.New("AGENT_API_KEY belum dikonfigurasi di server")
+	}
+
+	payloadMap := map[string]string{
+		"action":      action,
+		"command_key": action,
+		"ip":          targetIP,
+		"reason":      reason,
+	}
+	payloadBytes, err := sonic.Marshal(payloadMap)
+	if err != nil {
+		return nil, fmt.Errorf("gagal marshal containment payload: %w", err)
+	}
+
+	targetSessions := make([]*agentSession, 0)
+	targetKey := strings.ToLower(strings.TrimSpace(targetNode))
+
+	if targetKey != "" && targetKey != "all" && targetKey != "global" {
+		if val, ok := s.sessions.Load(targetKey); ok {
+			targetSessions = append(targetSessions, val.(*agentSession))
+		}
+	}
+
+	if len(targetSessions) == 0 {
+		seen := make(map[*agentSession]bool)
+		s.sessions.Range(func(key, value any) bool {
+			sess := value.(*agentSession)
+			if !seen[sess] {
+				seen[sess] = true
+				targetSessions = append(targetSessions, sess)
+			}
+			return true
+		})
+	}
+
+	if len(targetSessions) == 0 {
+		return nil, fmt.Errorf("tidak ada simpul agen PEP yang aktif terhubung ke reverse command tunnel")
+	}
+
+	results := make(map[string]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, sess := range targetSessions {
+		wg.Add(1)
+		go func(sess *agentSession) {
+			defer wg.Done()
+			cmdID := uuid.NewString()
+			nowTs := time.Now().Unix()
+			sig := services.GenerateHMAC(SecretKey, payloadBytes, nowTs)
+
+			cmdPkt := &proto.CommandPacket{
+				CommandId:   cmdID,
+				Timestamp:   nowTs,
+				Signature:   sig,
+				PayloadJson: payloadBytes,
+			}
+
+			waiter := &commandWaiter{resultCh: make(chan *proto.CommandResultPacket, 1)}
+			s.pendingWaiters.Store(cmdID, waiter)
+			defer s.pendingWaiters.Delete(cmdID)
+
+			nodeName := sess.agentName
+			if nodeName == "" {
+				nodeName = sess.agentID
+			}
+
+			select {
+			case sess.sendCh <- cmdPkt:
+			default:
+				mu.Lock()
+				results[nodeName] = "[ERROR] Antrean perintah agen penuh"
+				mu.Unlock()
+				return
+			}
+
+			select {
+			case res := <-waiter.resultCh:
+				var outMap map[string]string
+				_ = sonic.Unmarshal(res.PayloadJson, &outMap)
+				out := outMap["output"]
+				if out == "" {
+					out = string(res.PayloadJson)
+				}
+				mu.Lock()
+				results[nodeName] = out
+				mu.Unlock()
+
+			case <-time.After(timeout):
+				mu.Lock()
+				results[nodeName] = fmt.Sprintf("[TIMEOUT] Agen tidak merespon dalam %v", timeout)
+				mu.Unlock()
+			}
+		}(sess)
+	}
+
+	wg.Wait()
+	return results, nil
+}
+
 func getMetaFirst(md metadata.MD, key string) string {
 	vals := md.Get(key)
 	if len(vals) > 0 {

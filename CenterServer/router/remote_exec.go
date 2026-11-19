@@ -61,6 +61,56 @@ var NodeSSHMap = map[string]NodeSSHConfig{
 		HostKeyPin:  os.Getenv("SSH_NODE2_HOSTKEY_PIN"),
 		ServiceName: envOr("SSH_NODE2_SERVICE", "agentGo"),
 	},
+	"ubuntu-3": {
+		AgentID:     "ubuntu-3",
+		Aliases:     splitAliases(envOr("SSH_NODE3_ALIASES", "ubuntu-3,172.237.82.192,ubuntu-172.237.82.192,2600:3c15::2000:86ff:fea5:b4de,86b16e64-3e83-4397-a343-d5768b96b93a")),
+		Addr:        envOr("SSH_NODE3_ADDR", "172.237.82.192:22"),
+		User:        envOr("SSH_NODE3_USER", "root"),
+		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
+		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
+		HostKeyPin:  os.Getenv("SSH_NODE3_HOSTKEY_PIN"),
+		ServiceName: envOr("SSH_NODE3_SERVICE", "agentGo"),
+	},
+	"ubuntu-4": {
+		AgentID:     "ubuntu-4",
+		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.232.226.86,ubuntu-172.232.226.86,2600:3c0c::2000:baff:fe35:c41e,a6092f4c-1195-4d4f-92a5-b9fe92a8204f")),
+		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
+		User:        envOr("SSH_NODE4_USER", "root"),
+		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
+		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
+		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
+		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
+	},
+	"ubuntu-5": {
+		AgentID:     "ubuntu-4",
+		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.235.251.146,ubuntu-172.235.251.146,2600:3c0c::2000:bfff:fe6d:fcc0,4860ad47-89e7-43b7-ad40-e9bcc43d43db")),
+		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
+		User:        envOr("SSH_NODE4_USER", "root"),
+		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
+		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
+		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
+		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
+	},
+	"ubuntu-6": {
+		AgentID:     "ubuntu-4",
+		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.232.226.86,ubuntu-172.232.226.86,2600:3c0c::2000:baff:fe35:c41e,a6092f4c-1195-4d4f-92a5-b9fe92a8204f")),
+		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
+		User:        envOr("SSH_NODE4_USER", "root"),
+		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
+		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
+		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
+		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
+	},
+	"ubuntu-7": {
+		AgentID:     "ubuntu-4",
+		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.232.226.86,ubuntu-172.232.226.86,2600:3c0c::2000:baff:fe35:c41e,a6092f4c-1195-4d4f-92a5-b9fe92a8204f")),
+		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
+		User:        envOr("SSH_NODE4_USER", "root"),
+		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
+		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
+		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
+		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
+	},
 }
 
 // WhitelistCommands: perintah read-only yang tidak bergantung pada ServiceName.
@@ -337,6 +387,23 @@ func (sc *HandleService) HandleRemoteExec(c fiber.Ctx) error {
 		}
 	}
 	if err != nil {
+		// Fallback: Jika node belum ada di SSH Map, coba langsung via Reverse gRPC Command Tunnel
+		if ActiveGRPCServer != nil {
+			log.Printf("[remote-exec] Node %q tidak terdaftar di SSH Map. Mencoba eksekusi via Reverse gRPC Command Tunnel...", agentID)
+			start := time.Now()
+			if gOut, gCode, gErr := ActiveGRPCServer.ExecuteCommandViaGRPC(agentID, req.CommandKey, 10*time.Second); gErr == nil {
+				elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
+				sc.auditRemoteExec(c, NodeSSHConfig{Addr: "grpc-tunnel", ServiceName: "agentGo"}, agentID, req.CommandKey, req.CommandKey, gCode, nil, elapsedMs)
+				return c.JSON(fiber.Map{
+					"agent_id":          agentID,
+					"command_key":       req.CommandKey,
+					"executed_cmd":      req.CommandKey,
+					"output":            gOut + "\n[CHANNEL: REVERSE gRPC COMMAND TUNNEL]",
+					"exit_code":         gCode,
+					"execution_time_ms": elapsedMs,
+				})
+			}
+		}
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err.Error()})
 	}
 

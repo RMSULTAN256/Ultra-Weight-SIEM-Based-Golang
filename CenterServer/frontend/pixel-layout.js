@@ -51,6 +51,14 @@ async function authFetch(url, options) {
   opts.headers = authHeaders(opts.headers);
   const res = await fetch(url, opts);
   if (res.status === 401) {
+    try {
+      const clone = res.clone();
+      const body = await clone.json();
+      // Jangan logout otomatis jika status 401 bukan karena JWT session (misal invalid agent key)
+      if (body && body.error && typeof body.error === 'string' && body.error.toLowerCase().includes('agent key')) {
+        return res;
+      }
+    } catch (_) {}
     redirectToLogin('expired');
     throw new Error('Sesi berakhir, silakan login ulang.');
   }
@@ -142,14 +150,45 @@ function parseLogCategoryAndDetails(item) {
     categoryLabelShort = 'SSH';
     actionLabel = 'SESSION';
     summaryText = rawMsg;
-  } else if (service.includes('nginx') || service.includes('web') || item.endpoint || item.method) {
+  } else if (service.includes('nginx') || service.includes('web') || service.includes('apache') || msgLower.includes('http/1.') || msgLower.includes('http/2') || item.endpoint || item.method) {
     category = 'WEB';
     categoryLabelShort = 'WEB';
-    const method = (item.method || 'GET').toUpperCase();
-    const endpoint = item.endpoint || '/';
-    const code = item.status_code || 200;
+    
+    let method = (item.method || '').toUpperCase();
+    let endpoint = item.endpoint || '';
+    let code = item.status_code || item.statusCode || item.status;
+
+    if (rawMsg) {
+      // Format Nginx/Apache: "METHOD /path HTTP/x.x" CODE
+      const match = rawMsg.match(/"([A-Z]{3,7})\s+([^\s"]+)\s+HTTP\/[0-9.]+"\s+(\d{3})\b/);
+      if (match) {
+        if (!method) method = match[1];
+        if (!endpoint) endpoint = match[2];
+        if (!code) code = parseInt(match[3], 10);
+      } else {
+        const mStatus = rawMsg.match(/"\s+(\d{3})\b/) || rawMsg.match(/\bstatus[:\s=]+(\d{3})\b/i);
+        if (!code && mStatus) {
+          code = parseInt(mStatus[1], 10);
+        }
+      }
+    }
+
+    if (!method) method = 'GET';
+    if (!endpoint) endpoint = '/';
+    code = parseInt(code, 10) || 200;
+
     actionLabel = `${method} ${code}`;
     summaryText = rawMsg || `HTTP ${method} ${endpoint} — Status ${code}`;
+
+    return {
+      category,
+      categoryLabelShort,
+      actionLabel,
+      statusCode: code,
+      method,
+      endpoint,
+      summaryText
+    };
   } else {
     category = 'SYS';
     categoryLabelShort = 'SYS';
@@ -161,8 +200,40 @@ function parseLogCategoryAndDetails(item) {
     category,
     categoryLabelShort,
     actionLabel,
+    statusCode: null,
+    method: null,
+    endpoint: null,
     summaryText
   };
+}
+
+/** Helper untuk merender Badge Status HTTP (200 - 504) dengan warna standar SOC */
+function getHttpStatusTag(statusCode, method) {
+  const code = parseInt(statusCode, 10);
+  if (isNaN(code)) return '';
+
+  let colorClass = 'tag-http-2xx';
+  let desc = 'OK';
+
+  if (code >= 500 && code <= 504) {
+    colorClass = 'tag-http-5xx';
+    desc = code === 500 ? 'INTERNAL ERROR' : code === 502 ? 'BAD GATEWAY' : code === 504 ? 'GATEWAY TIMEOUT' : 'SERVER ERROR';
+  } else if (code >= 500) {
+    colorClass = 'tag-http-5xx';
+    desc = 'SERVER ERROR';
+  } else if (code >= 400 && code <= 499) {
+    colorClass = 'tag-http-4xx';
+    desc = code === 400 ? 'BAD REQUEST' : code === 401 ? 'UNAUTHORIZED' : code === 403 ? 'FORBIDDEN' : code === 404 ? 'NOT FOUND' : code === 429 ? 'RATE LIMITED' : 'CLIENT ERROR';
+  } else if (code >= 300 && code <= 399) {
+    colorClass = 'tag-http-3xx';
+    desc = code === 301 ? 'MOVED' : code === 304 ? 'NOT MODIFIED' : 'REDIRECT';
+  } else if (code >= 200 && code <= 299) {
+    colorClass = 'tag-http-2xx';
+    desc = code === 200 ? 'OK' : code === 201 ? 'CREATED' : code === 204 ? 'NO CONTENT' : 'SUCCESS';
+  }
+
+  const methodPrefix = method ? `<span style="opacity: 0.85; margin-right: 3px; font-weight: normal;">${escapeHtml(method)}</span>` : '';
+  return `<span class="pixel-tag ${colorClass}" title="HTTP ${code} ${desc}">${methodPrefix}${code}</span>`;
 }
 
 let logSeqCounter = 0;
@@ -184,6 +255,9 @@ function normalizeLogItem(item) {
     level: severity,
     category: parsed.categoryLabelShort,
     action: parsed.actionLabel,
+    statusCode: parsed.statusCode,
+    method: parsed.method,
+    endpoint: parsed.endpoint,
     desc: parsed.summaryText,
     mitre: mitre,
     raw: item
@@ -193,6 +267,7 @@ function normalizeLogItem(item) {
 window.escapeHtml = escapeHtml;
 window.parseLogCategoryAndDetails = parseLogCategoryAndDetails;
 window.normalizeLogItem = normalizeLogItem;
+window.getHttpStatusTag = getHttpStatusTag;
 
 // Guard
 const validToken = getValidToken();
@@ -205,10 +280,10 @@ const currentRole = (localStorage.getItem('auth_role') || 'analyst').toLowerCase
 
 // Navigation Definitions
 const ROUTES = [
-  { path: '/dashboard', label: 'DASHBOARD', icon: '::', file: 'pages/dashboard/index.tsx', aliases: ['/', '/index.html'] },
-  { path: '/analytics', label: 'ANALYTICS', icon: '||', file: 'pages/analytics/index.tsx', aliases: ['/status'] },
-  { path: '/logs', label: 'AUDIT LOGS', icon: '📜', file: 'pages/logs/index.tsx', aliases: [] },
-  { path: '/settings', label: 'SETTINGS & PROMPT', icon: '⚙️', file: 'pages/settings/index.tsx', aliases: [] }
+  { path: '/dashboard', label: 'DASHBOARD', icon: '::', file: 'dashboard.html', aliases: ['/', '/index.html'] },
+  { path: '/analytics', label: 'ANALYTICS', icon: '||', file: 'status.html', aliases: ['/status'] },
+  { path: '/logs', label: 'AUDIT LOGS', icon: '📜', file: 'logs.html', aliases: [] },
+  { path: '/settings', label: 'SETTINGS', icon: '⚙️', file: 'settings.html', aliases: [] }
 ];
 
 function isPathActive(route, currentPath) {
@@ -221,7 +296,7 @@ function getActiveRoute(currentPath) {
   return ROUTES.find(r => isPathActive(r, currentPath)) || ROUTES[0];
 }
 
-/** 1. Render Top HUD Address Bar */
+/** 1. Render Topbar Header (Clean Corporate Neo-Brutalist HUD) */
 function mountTopHUD() {
   const hudEl = document.getElementById('shared-hud');
   if (!hudEl) return;
@@ -230,47 +305,51 @@ function mountTopHUD() {
 
   hudEl.className = 'pixel-hud';
   hudEl.innerHTML = `
-    <!-- Left OS Identity -->
+    <!-- Left Corporate Identity -->
     <div class="hud-left">
       <div class="hud-shield-box">🛡️</div>
       <div class="hud-title-col">
         <div class="hud-title-row">
-          <span class="hud-os-title">PIXEL-SKY OS</span>
+          <span class="hud-os-title">CORP-SOC SIEM</span>
           <span class="hud-os-ver">v2.4</span>
-          <span class="hud-badge-ready">MULTI-PATH READY</span>
+          <span class="hud-badge-ready">SLA 99.98% OPTIMAL</span>
         </div>
-        <div class="hud-hp-row">
-          <span style="font-size: 8px;">❤️</span>
-          <div class="hud-hp-bar">
-            <div class="hud-hp-fill"></div>
-          </div>
-          <span class="hud-hp-text">92/100</span>
-        </div>
+        <span class="hud-sla-text">Enterprise Continuous Monitoring &amp; Zero-Trust Telemetry</span>
       </div>
     </div>
 
-    <!-- Center Address Bar -->
+    <!-- Center Address Bar (Active Endpoint & Route Name) -->
     <div class="hud-center-address">
       <span class="hud-address-globe">🌐</span>
-      <span class="hud-address-url">https://portal.office-internal.id</span>
-      <span class="hud-address-path-pill">${activeRoute.path}</span>
-      <span class="hud-address-file">${activeRoute.file}</span>
+      <span class="hud-address-path-pill" style="font-size: 11px; padding: 2px 8px; font-weight: 800;">${activeRoute.path}</span>
+      <span class="hud-address-url" style="color: #0F172A; font-weight: 800; font-size: 11px; margin-left: 4px;">${activeRoute.label}</span>
+      <span class="hud-address-file" style="color: #10B981; font-weight: 700; font-size: 10px;">● ACTIVE</span>
     </div>
 
-    <!-- Right Widgets & Actions -->
+    <!-- Right Corporate Actions -->
     <div class="hud-right">
-      <div class="hud-coins-box">
-        <span>🪙 600</span>
-        <span>⭐ 5</span>
+      <div class="hud-clock-box" id="hudClock">
+        <span>⏱️</span>
+        <span id="hudClockText">--:--:--</span>
       </div>
       <button class="hud-btn hud-btn-sync" onclick="window.location.reload()">
         SYNC DATA
       </button>
       <button class="hud-btn hud-btn-prompt" onclick="window.location.href='/settings'">
-        PROMPT OPSI A
+        SYS CONFIG
       </button>
     </div>
   `;
+
+  // Live Clock Ticker
+  const updateClock = () => {
+    const el = document.getElementById('hudClockText');
+    if (!el) return;
+    const now = new Date();
+    el.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')} WIB`;
+  };
+  updateClock();
+  setInterval(updateClock, 1000);
 }
 
 /** 2. Render Horizontal Route Tabs */
@@ -292,17 +371,11 @@ function mountHorizontalRouteTabs() {
   }).join('');
 }
 
-/** 3. Render Quest Banner */
+/** 3. Quest Banner (Disabled for Clean Corporate Look) */
 function mountQuestBanner() {
   const bannerEl = document.getElementById('shared-quest-banner');
   if (!bannerEl) return;
-
-  bannerEl.className = 'quest-banner';
-  bannerEl.innerHTML = `
-    <span class="quest-badge">QUEST!</span>
-    <span class="quest-banner-text">Mode Full Game aktif: lengkap dengan rumput &amp; pulau terbang!</span>
-    <button class="quest-close" onclick="this.parentElement.style.display='none'">[X]</button>
-  `;
+  bannerEl.style.display = 'none';
 }
 
 /** 4. Render Left Sidebar */
@@ -313,7 +386,7 @@ function mountLeftSidebar() {
   const activeRoute = getActiveRoute(currentPath);
 
   sidebarEl.innerHTML = `
-    <!-- Card 1: MENU NAVIGASI (Multi-Route Controller) -->
+    <!-- Card 1: MENU NAVIGASI (System Routing) -->
     <div class="island-card">
       <div class="island-grass-cap"></div>
       <div class="island-header-bar">
@@ -321,7 +394,7 @@ function mountLeftSidebar() {
           <span>::</span>
           <div>
             <div>MENU NAVIGASI</div>
-            <span class="island-header-sub">Multi-Route Controller</span>
+            <span class="island-header-sub">System Routing</span>
           </div>
         </div>
         <div class="window-dots">
@@ -348,22 +421,22 @@ function mountLeftSidebar() {
             <span>⚡</span>
             <span>STATUS STRUKTUR PATH:</span>
           </div>
-          <div>Terpisah per menu (bukan 1 path penumpukan komponen). Route aktif:</div>
+          <div>Terpisah per route modular. Route aktif:</div>
           <span class="route-status-pill">${activeRoute.path}</span>
         </div>
       </div>
       <div class="island-dirt-crust"></div>
     </div>
 
-    <!-- Card 2: QUEST COMMAND (Kontrol Cepat) -->
+    <!-- Card 2: QUICK ACTIONS (System Control) -->
     <div class="island-card">
       <div class="island-grass-cap"></div>
       <div class="island-header-bar">
         <div class="island-header-title">
           <span>✦</span>
           <div>
-            <div>QUEST COMMAND</div>
-            <span class="island-header-sub">Kontrol Cepat</span>
+            <div>QUICK ACTIONS</div>
+            <span class="island-header-sub">System Control</span>
           </div>
         </div>
         <div class="window-dots">
@@ -374,11 +447,11 @@ function mountLeftSidebar() {
       </div>
       <div class="island-body">
         <div class="cmd-btn-row">
-          <button class="pixel-cmd-btn pixel-cmd-green" onclick="window.location.reload()">
-            + TAMBAH SERVICE NODE
+          <button class="pixel-cmd-btn pixel-cmd-green" onclick="window.location.href='/analytics'">
+            + PROBE ALL NODES
           </button>
-          <button class="pixel-cmd-btn pixel-cmd-cyan" onclick="navigator.clipboard.writeText('PIXEL-SKY OS FULL GAME BLUEPRINT'); alert('Prompt Opsi A berhasil disalin!');">
-            ❐ COPY PROMPT OPSI A
+          <button class="pixel-cmd-btn pixel-cmd-cyan" onclick="window.location.href='/logs'">
+            ❐ EXPORT AUDIT LOGS
           </button>
         </div>
       </div>
@@ -386,6 +459,38 @@ function mountLeftSidebar() {
     </div>
   `;
 }
+
+/** Reusable <IslandCard /> component builder */
+function createIslandCard(title, subtitle, contentHtml, badge = '') {
+  const badgeHtml = badge ? `<span class="pixel-tag tag-cyan">${escapeHtml(badge)}</span>` : '';
+  return `
+    <div class="island-card">
+      <div class="island-grass-cap"></div>
+      <div class="island-header-bar">
+        <div class="island-header-title">
+          <span>::</span>
+          <div>
+            <div>${escapeHtml(title)}</div>
+            ${subtitle ? `<span class="island-header-sub">${escapeHtml(subtitle)}</span>` : ''}
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          ${badgeHtml}
+          <div class="window-dots">
+            <div class="window-dot"></div>
+            <div class="window-dot"></div>
+            <div class="window-dot"></div>
+          </div>
+        </div>
+      </div>
+      <div class="island-body">
+        ${contentHtml}
+      </div>
+      <div class="island-dirt-crust"></div>
+    </div>
+  `;
+}
+window.createIslandCard = createIslandCard;
 
 /** 5. Render Active Route Strip */
 function mountActiveRouteStrip(name, path, desc) {
@@ -402,9 +507,9 @@ function mountActiveRouteStrip(name, path, desc) {
       <span class="active-route-desc">${desc}</span>
     </div>
     <div class="active-route-filter-pills">
-      <button class="filter-pill-btn active">7D</button>
-      <button class="filter-pill-btn">30D</button>
-      <button class="filter-pill-btn">12M</button>
+      <button class="filter-pill-btn time-range-pill" data-range="7D" onclick="if(window.setTimeRange) setTimeRange('7D')">7D</button>
+      <button class="filter-pill-btn time-range-pill" data-range="30D" onclick="if(window.setTimeRange) setTimeRange('30D')">30D</button>
+      <button class="filter-pill-btn time-range-pill active" data-range="12M" onclick="if(window.setTimeRange) setTimeRange('12M')">12M</button>
     </div>
   `;
 }

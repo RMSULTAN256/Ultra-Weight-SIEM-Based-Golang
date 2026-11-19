@@ -26,6 +26,12 @@ type IPTrafficRecord struct {
 	IP           string    `json:"ip"`
 	Hostname     string    `json:"hostname"`
 	Category     string    `json:"category"`
+	Country      string    `json:"country,omitempty"`
+	CountryCode  string    `json:"country_code,omitempty"`
+	City         string    `json:"city,omitempty"`
+	ISP          string    `json:"isp,omitempty"`
+	Lat          float64   `json:"lat,omitempty"`
+	Lon          float64   `json:"lon,omitempty"`
 	RequestCount uint64    `json:"request_count"`
 	FirstSeen    time.Time `json:"first_seen"`
 	LastSeen     time.Time `json:"last_seen"`

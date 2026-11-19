@@ -5,12 +5,16 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
+	"server3/databases"
 	"server3/models"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/gofiber/fiber/v3"
 )
 
 const MaxLogsInMemory = 1000
@@ -74,6 +78,7 @@ var defaultCorrelationRules = []correlationRule{
 }
 
 type SIEMService struct {
+	db        *databases.DBService
 	clientsMu sync.Mutex
 	clients   map[chan string]bool
 
@@ -92,21 +97,39 @@ type SIEMService struct {
 	totalLogsCount uint64
 }
 
-func NewSIEMService() *SIEMService {
+func NewSIEMService(dbs ...*databases.DBService) *SIEMService {
+	var db *databases.DBService
+	if len(dbs) > 0 {
+		db = dbs[0]
+	}
+
 	svc := &SIEMService{
+		db:            db,
 		clients:       make(map[chan string]bool),
 		ipRecords:     make(map[string]*models.IPTrafficRecord),
 		agents:        make(map[string]*models.DeviceStatus),
 		logs:          make([]models.SecurityLog, 0, MaxLogsInMemory),
 		slidingWindow: make(map[string][]time.Time),
 	}
+	if svc.db != nil {
+		if savedIPs, err := svc.db.GetAllIPs(); err == nil {
+			for _, rec := range savedIPs {
+				svc.ipRecords[rec.IP] = rec
+			}
+		}
+	}
 	svc.loadInitialData()
 	return svc
 }
 
 func (s *SIEMService) loadInitialData() {
+	eventFileEnv := os.Getenv("EVENTS_FILE")
+	if eventFileEnv == "" {
+		eventFileEnv = os.Getenv("EVENT_FILE")
+	}
 	// 1. Load historical events from events.ndjson or seed file
 	eventFiles := []string{
+		eventFileEnv,
 		"data/events.ndjson",
 		"events.ndjson",
 		"CenterServer/events.ndjson",
@@ -350,6 +373,47 @@ func (s *SIEMService) GetLogsPaged(page, pageSize int) ([]models.SecurityLog, in
 	return res, total
 }
 
+func resolveGeoInfo(ip string) (country, code, city, isp string, lat, lon float64) {
+	parsed := net.ParseIP(ip)
+	if parsed != nil {
+		if parsed.IsLoopback() {
+			return "Indonesia", "ID", "Batam (Center SIEM)", "Internal Gateway (Loopback)", 1.130, 104.052
+		}
+		if parsed.IsPrivate() || parsed.IsLinkLocalMulticast() || parsed.IsLinkLocalUnicast() {
+			return "Indonesia", "ID", "Local Cluster LAN", "Intranet Gateway", 1.130, 104.052
+		}
+	}
+	switch ip {
+	case "127.0.0.1", "localhost":
+		return "Indonesia", "ID", "Batam (Center SIEM)", "Internal PDP Gateway", 1.130, 104.052
+	case "31.56.56.50":
+		return "Indonesia", "ID", "Bogor, West Java", "CV Andhika Pratama", -6.5945, 106.789
+	case "163.52.135.170", "163.52.135.":
+		return "Indonesia", "ID", "Madiun, East Java", "CV Griya Cloud", -7.7163, 111.6152
+	case "158.140.164.90":
+		return "Indonesia", "ID", "Binjai, North Sumatra", "MyRepublic Indonesia", 3.6001, 98.4854
+	case "203.83.39.23", "203.83.39.0":
+		return "Indonesia", "ID", "Medan, North Sumatra", "PT Eka Mas Republik", 3.5833, 98.6667
+	case "103.144.12.88":
+		return "Singapore", "SG", "Singapore", "Cloudflare / APNIC", 1.3521, 103.8198
+	case "194.26.29.112":
+		return "Netherlands", "NL", "Amsterdam", "HostKey Server", 52.3676, 4.9041
+	case "45.33.32.156":
+		return "United States", "US", "Fremont, CA", "Linode Cloud", 37.5483, -121.9886
+	case "185.220.101.5":
+		return "Germany", "DE", "Frankfurt", "Tor Exit Node Relay", 50.1109, 8.6821
+	case "222.186.30.12":
+		return "China", "CN", "Jiangsu", "China Telecom", 32.0617, 118.7632
+	}
+	if strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "172.") {
+		return "Indonesia", "ID", "Local Cluster LAN", "Intranet Gateway", 1.130, 104.052
+	}
+	if parsed != nil && parsed.To4() == nil {
+		return "Global IPv6", "XX", "Resolving IPv6...", "Global Transit", 0, 0
+	}
+	return "Internet", "XX", "Resolving Location...", "Public IP", 0, 0
+}
+
 func (s *SIEMService) RecordIP(ip string, hostname string, category string, threat string) *models.IPTrafficRecord {
 	if ip == "" || net.ParseIP(ip) == nil {
 		return nil
@@ -359,11 +423,20 @@ func (s *SIEMService) RecordIP(ip string, hostname string, category string, thre
 
 	rec, exists := s.ipRecords[ip]
 	now := time.Now()
+	needGeoLookup := false
+
 	if !exists {
+		cName, cCode, cCity, cIsp, cLat, cLon := resolveGeoInfo(ip)
 		rec = &models.IPTrafficRecord{
 			IP:           ip,
 			Hostname:     hostname,
 			Category:     category,
+			Country:      cName,
+			CountryCode:  cCode,
+			City:         cCity,
+			ISP:          cIsp,
+			Lat:          cLat,
+			Lon:          cLon,
 			RequestCount: 1,
 			FirstSeen:    now,
 			LastSeen:     now,
@@ -371,18 +444,62 @@ func (s *SIEMService) RecordIP(ip string, hostname string, category string, thre
 			Status:       "Monitored",
 		}
 		s.ipRecords[ip] = rec
+
+		if cCode == "XX" || cCity == "ID Gateway" {
+			needGeoLookup = true
+		}
 	} else {
 		rec.RequestCount++
 		rec.LastSeen = now
 		if hostname != "" {
 			rec.Hostname = hostname
 		}
+
+		if rec.Country == "" || rec.City == "ID Gateway" {
+			rec.Country, rec.CountryCode, rec.City, rec.ISP, rec.Lat, rec.Lon = resolveGeoInfo(ip)
+		}
 		if threat == "Critical" || (threat == "Suspicious" && rec.ThreatLevel == "Normal") {
 			rec.ThreatLevel = threat
+		}
+
+		if rec.CountryCode == "XX" || rec.Country == "" || rec.City == "ID Gateway" || (rec.Lat == 0 && rec.Lon == 0 && rec.CountryCode != "ID") {
+			needGeoLookup = true
 		}
 	}
 
 	copyRec := *rec
+
+	if s.db != nil {
+		go func(r models.IPTrafficRecord, lookUp bool) {
+			if lookUp {
+				if cName, cCode, cCity, cIsp, cLat, cLon, ok := fetchGeoIPOnline(r.IP); ok {
+					r.Country = cName
+					r.CountryCode = cCode
+					r.City = cCity
+					r.ISP = cIsp
+					r.Lat = cLat
+					r.Lon = cLon
+
+					s.ipMu.Lock()
+					if memRec, okMem := s.ipRecords[r.IP]; okMem {
+						memRec.Country = cName
+						memRec.CountryCode = cCode
+						memRec.City = cCity
+						memRec.ISP = cIsp
+						memRec.Lat = cLat
+						memRec.Lon = cLon
+					}
+					s.ipMu.Unlock()
+
+					if ipBytes, err := sonic.Marshal(fiber.Map{"event_type": "IP_UPDATE", "data": r}); err == nil {
+						s.Broadcast(string(ipBytes))
+					}
+				}
+			}
+
+			_ = s.db.UpsertIP(&r)
+		}(copyRec, needGeoLookup)
+	}
 	return &copyRec
 }
 
@@ -399,26 +516,66 @@ func (s *SIEMService) GetAllIPs() []*models.IPTrafficRecord {
 }
 
 func (s *SIEMService) ToggleBlockIP(ip string) (*models.IPTrafficRecord, bool) {
+	s.ipMu.RLock()
+	rec, exists := s.ipRecords[ip]
+	s.ipMu.RUnlock()
+
+	if !exists {
+		return nil, false
+	}
+	shouldBlock := rec.Status != "Blocked (iptables)"
+	return s.SetBlockIPStatus(ip, shouldBlock)
+}
+
+func (s *SIEMService) SetBlockIPStatus(ip string, blocked bool) (*models.IPTrafficRecord, bool) {
 	s.ipMu.Lock()
 	defer s.ipMu.Unlock()
 
 	rec, exists := s.ipRecords[ip]
 	if !exists {
-		return nil, false
+		rec = &models.IPTrafficRecord{
+			IP:          ip,
+			Hostname:    "manual-pep",
+			Category:    "Manual Containment",
+			FirstSeen:   time.Now(),
+			LastSeen:    time.Now(),
+			ThreatLevel: "Critical",
+			Status:      "Monitored",
+		}
+		s.ipRecords[ip] = rec
 	}
 
 	if isWhiteListedIP(ip) {
 		return rec, false
 	}
 
-	if rec.Status == "Blocked (iptables)" {
-		rec.Status = "Monitored"
-	} else {
+	if blocked {
 		rec.Status = "Blocked (iptables)"
+	} else {
+		rec.Status = "Monitored"
 	}
 
 	copyRec := *rec
+	if s.db != nil {
+		go func(r models.IPTrafficRecord) {
+			_ = s.db.UpsertIP(&r)
+		}(copyRec)
+	}
 	return &copyRec, true
+}
+
+func (s *SIEMService) GetBlockedIPs() []*models.IPTrafficRecord {
+	s.ipMu.RLock()
+	defer s.ipMu.RUnlock()
+
+	list := make([]*models.IPTrafficRecord, 0)
+	for _, rec := range s.ipRecords {
+		if strings.HasPrefix(rec.Status, "Blocked") {
+			copyRec := *rec
+			list = append(list, &copyRec)
+		}
+	}
+	return list
 }
 
 func (s *SIEMService) AddClient(ch chan string) {
@@ -494,4 +651,53 @@ func (s *SIEMService) CorrelateLog(secLog models.SecurityLog) models.SecurityLog
 		}
 	}
 	return secLog
+}
+
+type geoResult struct {
+	Country     string
+	CountryCode string
+	City        string
+	ISP         string
+	Lat         float64
+	Lon         float64
+}
+
+var geoCache sync.Map
+
+func fetchGeoIPOnline(ip string) (country, code, city, isp string, lat, lon float64, ok bool) {
+	if val, found := geoCache.Load(ip); found {
+		res := val.(geoResult)
+		return res.Country, res.CountryCode, res.City, res.ISP, res.Lat, res.Lon, true
+	}
+
+	client := http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://ip-api.com/json/" + ip + "?fields=status,country,countryCode,city,isp,lat,lon")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return "", "", "", "", 0, 0, false
+	}
+	defer resp.Body.Close()
+
+	var data struct {
+		Status      string  `json:"status"`
+		Country     string  `json:"country"`
+		CountryCode string  `json:"countryCode"`
+		City        string  `json:"city"`
+		ISP         string  `json:"isp"`
+		Lat         float64 `json:"lat"`
+		Lon         float64 `json:"lon"`
+	}
+
+	if err := sonic.ConfigFastest.NewDecoder(resp.Body).Decode(&data); err == nil && data.Status == "success" {
+		gr := geoResult{
+			Country:     data.Country,
+			CountryCode: data.CountryCode,
+			City:        data.City,
+			ISP:         data.ISP,
+			Lat:         data.Lat,
+			Lon:         data.Lon,
+		}
+		geoCache.Store(ip, gr)
+		return gr.Country, gr.CountryCode, gr.City, gr.ISP, gr.Lat, gr.Lon, true
+	}
+	return "", "", "", "", 0, 0, false
 }

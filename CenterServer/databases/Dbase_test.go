@@ -2,6 +2,7 @@ package databases
 
 import (
 	"path/filepath"
+	"server3/models"
 	"strings"
 	"testing"
 )
@@ -179,3 +180,55 @@ func TestRegisterUserUsernameCase(t *testing.T) {
 		t.Errorf("akun 'Admin' harus bisa login dengan password sendiri: %v", err)
 	}
 }
+
+func TestIPTrafficUpsertDanGetAll(t *testing.T) {
+	db := bukaDB(t)
+
+	// Test Upsert IP pertama kali
+	rec1 := &models.IPTrafficRecord{
+		IP:           "203.83.39.23",
+		Hostname:     "ubuntu-1",
+		Category:     "HTTP Web",
+		Country:      "Indonesia",
+		CountryCode:  "ID",
+		City:         "Medan, North Sumatra",
+		ISP:          "PT Eka Mas Republik",
+		RequestCount: 5,
+		ThreatLevel:  "Normal",
+		Status:       "Monitored",
+	}
+
+	if err := db.UpsertIP(rec1); err != nil {
+		t.Fatalf("UpsertIP pertama gagal: %v", err)
+	}
+
+	ips, err := db.GetAllIPs()
+	if err != nil {
+		t.Fatalf("GetAllIPs gagal: %v", err)
+	}
+	if len(ips) != 1 {
+		t.Fatalf("jumlah IP harus 1, dapat %d", len(ips))
+	}
+	if ips[0].IP != "203.83.39.23" || ips[0].Country != "Indonesia" || ips[0].CountryCode != "ID" {
+		t.Errorf("data IP tidak cocok: %+v", ips[0])
+	}
+
+	// Test Upsert update request_count & threat_level
+	rec1.RequestCount = 10
+	rec1.ThreatLevel = "Critical"
+	if err := db.UpsertIP(rec1); err != nil {
+		t.Fatalf("UpsertIP update gagal: %v", err)
+	}
+
+	ips2, err := db.GetAllIPs()
+	if err != nil {
+		t.Fatalf("GetAllIPs kedua gagal: %v", err)
+	}
+	if len(ips2) != 1 {
+		t.Fatalf("jumlah IP harus tetap 1 setelah upsert update, dapat %d", len(ips2))
+	}
+	if ips2[0].RequestCount != 10 || ips2[0].ThreatLevel != "Critical" {
+		t.Errorf("data IP setelah update tidak sesuai: count=%d threat=%s", ips2[0].RequestCount, ips2[0].ThreatLevel)
+	}
+}
+

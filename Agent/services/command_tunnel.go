@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"strings"
 	"time"
@@ -88,8 +89,26 @@ func StartCommandTunnel(conn *grpc.ClientConn, agentName, agentID, agentKey stri
 				}
 
 				cmdKey := strings.TrimSpace(reqMap["command_key"])
-				log.Printf("[grpc-tunnel] Menerima perintah: %q (ID: %s)", cmdKey, cmdPkt.CommandId)
+				action := strings.TrimSpace(reqMap["action"])
+				if action == "" {
+					action = cmdKey
+				}
+				log.Printf("[grpc-tunnel] Menerima perintah: %q / action: %q (ID: %s)", cmdKey, action, cmdPkt.CommandId)
 
+				// 1. Periksa apakah aksi merupakan Dynamic Containment (iptables PEP)
+				if action == "block_ip" || action == "unblock_ip" || action == "containment_status" {
+					outStr, exitCode := handleContainmentAction(action, reqMap)
+					resMap := map[string]string{"output": outStr}
+					resJson, _ := sonic.Marshal(resMap)
+					_ = stream.Send(&proto.CommandResultPacket{
+						CommandId:   cmdPkt.CommandId,
+						ExitCode:    int32(exitCode),
+						PayloadJson: resJson,
+					})
+					continue
+				}
+
+				// 2. Periksa whitelist perintah sistem standar
 				rawCmd, allowed := SafeWhitelistActions[cmdKey]
 				if !allowed {
 					log.Printf("[SECURITY] Perintah %q DITOLAK (tidak terdaftar di whitelist)", cmdKey)
@@ -126,4 +145,74 @@ func StartCommandTunnel(conn *grpc.ClientConn, agentName, agentID, agentKey stri
 			time.Sleep(3 * time.Second)
 		}
 	}()
+}
+
+// handleContainmentAction mengeksekusi aksi isolasi firewall iptables (PEP Zero-Trust)
+func handleContainmentAction(action string, reqMap map[string]string) (string, int) {
+	if action == "containment_status" {
+		out, err := exec.Command("iptables", "-L", "INPUT", "-v", "-n").CombinedOutput()
+		if err != nil {
+			out, err = exec.Command("sudo", "iptables", "-L", "INPUT", "-v", "-n").CombinedOutput()
+		}
+		if err != nil {
+			return fmt.Sprintf("[PEP-ERROR] Gagal membaca iptables: %v (%s)", err, string(out)), 1
+		}
+		return string(out), 0
+	}
+
+	targetIP := strings.TrimSpace(reqMap["ip"])
+	if targetIP == "" {
+		targetIP = strings.TrimSpace(reqMap["target_ip"])
+	}
+	if targetIP == "" {
+		return "[PEP-ERROR] Parameter IP target tidak disertakan", 1
+	}
+
+	parsedIP := net.ParseIP(targetIP)
+	if parsedIP == nil {
+		return fmt.Sprintf("[PEP-ERROR] Format IP target '%s' tidak valid", targetIP), 1
+	}
+	if parsedIP.IsLoopback() {
+		return fmt.Sprintf("[PEP-ERROR] IP %s adalah loopback (dilarang diblokir demi keamanan node)", targetIP), 1
+	}
+
+	switch action {
+	case "block_ip":
+		// 1. Cek apakah aturan DROP sudah ada di kernel
+		checkCmd := exec.Command("iptables", "-C", "INPUT", "-s", targetIP, "-j", "DROP")
+		if err := checkCmd.Run(); err == nil {
+			return fmt.Sprintf("[PEP-CONTAINMENT] IP %s sudah berada dalam daftar blokir iptables DROP", targetIP), 0
+		}
+
+		// 2. Terapkan aturan iptables -I INPUT -s <IP> -j DROP
+		blockCmd := exec.Command("iptables", "-I", "INPUT", "-s", targetIP, "-j", "DROP")
+		out, err := blockCmd.CombinedOutput()
+		if err != nil {
+			// Fallback coba dengan sudo jika service non-root
+			sudoCmd := exec.Command("sudo", "iptables", "-I", "INPUT", "-s", targetIP, "-j", "DROP")
+			sudoOut, sudoErr := sudoCmd.CombinedOutput()
+			if sudoErr != nil {
+				return fmt.Sprintf("[PEP-ERROR] Gagal menjalankan iptables DROP untuk %s: %v (%s | %s)", targetIP, err, string(out), string(sudoOut)), 1
+			}
+		}
+		log.Printf("[PEP-CONTAINMENT] SUKSES: IP %s berhasil diisolasi (iptables -I INPUT -s %s -j DROP)", targetIP, targetIP)
+		return fmt.Sprintf("[PEP-CONTAINMENT] SUKSES: IP %s berhasil diisolasi pada firewall kernel simpul (iptables DROP)", targetIP), 0
+
+	case "unblock_ip":
+		// Cek & hapus aturan iptables -D INPUT -s <IP> -j DROP
+		delCmd := exec.Command("iptables", "-D", "INPUT", "-s", targetIP, "-j", "DROP")
+		out, err := delCmd.CombinedOutput()
+		if err != nil {
+			sudoCmd := exec.Command("sudo", "iptables", "-D", "INPUT", "-s", targetIP, "-j", "DROP")
+			sudoOut, sudoErr := sudoCmd.CombinedOutput()
+			if sudoErr != nil {
+				return fmt.Sprintf("[PEP-CONTAINMENT] IP %s tidak ditemukan atau gagal dihapus dari iptables: %s (direct: %s)", targetIP, string(sudoOut), string(out)), 1
+			}
+		}
+		log.Printf("[PEP-CONTAINMENT] SUKSES: Blokir IP %s dilepas dari iptables DROP", targetIP)
+		return fmt.Sprintf("[PEP-CONTAINMENT] SUKSES: Blokir IP %s berhasil dicabut dari iptables simpul", targetIP), 0
+
+	default:
+		return fmt.Sprintf("[PEP-ERROR] Aksi containment '%s' tidak dikenali", action), 1
+	}
 }

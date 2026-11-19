@@ -66,7 +66,7 @@ func getEventsFilePath() string {
 	if _, err := os.Stat("CenterServer/events.ndjson"); err == nil {
 		return "CenterServer/events.ndjson"
 	}
-	return "events.ndjson"
+	return "/app/data/events.ndjson"
 }
 
 func getHeartbeatFilePath() string {
@@ -230,23 +230,175 @@ func (sc *HandleService) HandleGetIPs(c fiber.Ctx) error {
 
 func (sc *HandleService) HandleBlockIP(c fiber.Ctx) error {
 	type BlockReq struct {
-		IP string `json:"ip"`
+		IP     string `json:"ip"`
+		Node   string `json:"node"`
+		Reason string `json:"reason"`
 	}
 	var req BlockReq
-	if err := sonic.Unmarshal(c.Body(), &req); err != nil || req.IP == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid IP specified"})
+	if err := sonic.Unmarshal(c.Body(), &req); err != nil || strings.TrimSpace(req.IP) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Alamat IP target wajib diisi"})
 	}
 
-	rec, exists := sc.siemService.ToggleBlockIP(req.IP)
+	ipStr := strings.TrimSpace(req.IP)
+	parsedIP := net.ParseIP(ipStr)
+	if parsedIP == nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Format IP target tidak valid"})
+	}
+	if parsedIP.IsLoopback() {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "IP Loopback (127.0.0.1) dilarang diblokir demi integritas sistem"})
+	}
+
+	rec, _ := sc.siemService.SetBlockIPStatus(ipStr, true)
+
+	if ipBytes, err := sonic.Marshal(fiber.Map{"event_type": "IP_UPDATE", "data": rec}); err == nil {
+		sc.siemService.Broadcast(string(ipBytes))
+	}
+
+	results := make(map[string]string)
+	var dispatchErr error
+	targetNode := strings.TrimSpace(req.Node)
+	if targetNode == "" && rec != nil && rec.Hostname != "" {
+		targetNode = rec.Hostname
+	}
+
+	if ActiveGRPCServer != nil {
+		res, err := ActiveGRPCServer.DispatchContainment(targetNode, "block_ip", ipStr, req.Reason, 8*time.Second)
+		results = res
+		dispatchErr = err
+	} else {
+		results["cluster"] = "ActiveGRPCServer belum siap"
+	}
+
+	actor, _ := c.Locals("username").(string)
+	if actor == "" {
+		actor = "admin"
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		reason = "Zero-Trust PEP Dynamic Containment: IP diisolasi via iptables DROP"
+	}
+
+	auditLog := models.SecurityLog{
+		Timestamp: time.Now().UTC(),
+		Hostname:  targetNode,
+		EventType: "dynamic_containment",
+		Severity:  12,
+		SourceIP:  ipStr,
+		User:      actor,
+		Service:   "iptables-PEP",
+		Endpoint:  "/api/v1/containment/block",
+		MitreID:   "M1037",
+		RuleID:    "PEP-CONTAIN-001",
+		RuleDesc:  reason,
+		Status:    "QUARANTINED",
+	}
+	sc.siemService.AddLog(auditLog)
+	if jsonBytes, err := sonic.Marshal(auditLog); err == nil {
+		sc.siemService.Broadcast(string(jsonBytes))
+	}
+
+	resp := fiber.Map{
+		"status":         "success",
+		"ip":             ipStr,
+		"current_status": "Blocked (iptables)",
+		"results":        results,
+	}
+	if dispatchErr != nil {
+		resp["warning"] = dispatchErr.Error()
+	}
+	return c.JSON(resp)
+}
+
+func (sc *HandleService) HandleUnblockIP(c fiber.Ctx) error {
+	type UnblockReq struct {
+		IP   string `json:"ip"`
+		Node string `json:"node"`
+	}
+	var req UnblockReq
+	if err := sonic.Unmarshal(c.Body(), &req); err != nil || strings.TrimSpace(req.IP) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Alamat IP target wajib diisi"})
+	}
+
+	ipStr := strings.TrimSpace(req.IP)
+	rec, exists := sc.siemService.SetBlockIPStatus(ipStr, false)
 	if !exists {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "IP not found in tracking records"})
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "IP tidak ditemukan dalam database telemetri"})
 	}
 
 	if ipBytes, err := sonic.Marshal(fiber.Map{"event_type": "IP_UPDATE", "data": rec}); err == nil {
 		sc.siemService.Broadcast(string(ipBytes))
 	}
 
-	return c.JSON(fiber.Map{"status": "success", "ip": req.IP, "current_status": rec.Status})
+	results := make(map[string]string)
+	var dispatchErr error
+	targetNode := strings.TrimSpace(req.Node)
+	if targetNode == "" && rec != nil && rec.Hostname != "" {
+		targetNode = rec.Hostname
+	}
+
+	if ActiveGRPCServer != nil {
+		res, err := ActiveGRPCServer.DispatchContainment(targetNode, "unblock_ip", ipStr, "Admin Unblock", 8*time.Second)
+		results = res
+		dispatchErr = err
+	}
+
+	actor, _ := c.Locals("username").(string)
+	if actor == "" {
+		actor = "admin"
+	}
+	auditLog := models.SecurityLog{
+		Timestamp: time.Now().UTC(),
+		Hostname:  targetNode,
+		EventType: "containment_release",
+		Severity:  5,
+		SourceIP:  ipStr,
+		User:      actor,
+		Service:   "iptables-PEP",
+		Endpoint:  "/api/v1/containment/unblock",
+		MitreID:   "M1037",
+		RuleID:    "PEP-CONTAIN-002",
+		RuleDesc:  fmt.Sprintf("Zero-Trust PEP Dynamic Containment: Blokir iptables IP %s dicabut oleh %s", ipStr, actor),
+		Status:    "RELEASED",
+	}
+	sc.siemService.AddLog(auditLog)
+	if jsonBytes, err := sonic.Marshal(auditLog); err == nil {
+		sc.siemService.Broadcast(string(jsonBytes))
+	}
+
+	resp := fiber.Map{
+		"status":         "success",
+		"ip":             ipStr,
+		"current_status": "Monitored",
+		"results":        results,
+	}
+	if dispatchErr != nil {
+		resp["warning"] = dispatchErr.Error()
+	}
+	return c.JSON(resp)
+}
+
+func (sc *HandleService) HandleGetBlockedIPs(c fiber.Ctx) error {
+	blocked := sc.siemService.GetBlockedIPs()
+	type BlockedItem struct {
+		IP        string `json:"ip"`
+		Node      string `json:"node"`
+		Reason    string `json:"reason"`
+		LastSeen  string `json:"last_seen"`
+		ThreatLvl string `json:"threat_level"`
+		Status    string `json:"status"`
+	}
+	out := make([]BlockedItem, 0, len(blocked))
+	for _, b := range blocked {
+		out = append(out, BlockedItem{
+			IP:        b.IP,
+			Node:      b.Hostname,
+			Reason:    "Zero-Trust PEP iptables DROP",
+			LastSeen:  b.LastSeen.Format("15:04:05"),
+			ThreatLvl: b.ThreatLevel,
+			Status:    b.Status,
+		})
+	}
+	return c.JSON(out)
 }
 
 func (sc *HandleService) HandleStream(c fiber.Ctx) error {
