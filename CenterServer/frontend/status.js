@@ -69,6 +69,15 @@ function renderFleetCards() {
     const probeRtt = ag.__probeRtt ? `${ag.__probeRtt.toFixed(1)} ms` : (ag.latency_ms ? `${Number(ag.latency_ms).toFixed(1)} ms` : '-');
     const targetKey = ag.hostname || ag.ip || ag.agent_id;
 
+    const cpuCores = ag.cpu_cores || ag.cores || ag.threads || ag.cpu_threads;
+    const cpuCoresStr = cpuCores ? `<span style="color: var(--text-muted); font-size: 9px; margin-right: 4px;">(${cpuCores} Threads)</span>` : '';
+
+    const ramDetail = (ag.ram_total_mb && ag.ram_total_mb > 0)
+      ? `${formatMB(ag.ram_used_mb)} / ${formatMB(ag.ram_total_mb)}`
+      : '';
+
+    const agentMem = ag.agent_mem_mb ? `${Number(ag.agent_mem_mb).toFixed(1)} MB` : '-';
+
     const uuidRow = (uuid !== hostname && uuid !== '-') ? `
       <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 9px;">
         <span style="color: var(--text-muted);">MACHINE UUID:</span>
@@ -100,22 +109,34 @@ function renderFleetCards() {
         <div style="margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px;">
             <span>CPU UTILIZATION:</span>
-            <strong>${cpu}%</strong>
+            <span>
+              ${cpuCoresStr}
+              <strong>${cpu}%</strong>
+            </span>
           </div>
           <div class="route-load-bar-wrap">
             <div class="route-load-bar-fill" style="width: ${Math.min(cpu, 100)}%;"></div>
           </div>
         </div>
 
-        <!-- Memory Heap Gauge -->
+        <!-- Memory Heap Gauge (Host OS) -->
         <div style="margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px;">
             <span>MEMORY HEAP:</span>
-            <strong>${ram}%</strong>
+            <span>
+              ${ramDetail ? `<span style="color: var(--text-muted); font-size: 9px; margin-right: 4px;">${ramDetail}</span>` : ''}
+              <strong>${ram}%</strong>
+            </span>
           </div>
           <div class="route-load-bar-wrap">
             <div class="route-load-bar-fill" style="width: ${Math.min(ram, 100)}%; background: #22C55E; box-shadow: 0 0 4px #22C55E;"></div>
           </div>
+        </div>
+
+        <!-- Agent Engine Footprint (Golang Binary RAM) -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; background: #F8FAFC; border: 1px dashed #94A3B8; margin-bottom: 8px; font-size: 10px;">
+          <span style="color: var(--text-muted);">ENGINE RAM (AGENT):</span>
+          <strong style="color: #16A34A; font-family: var(--font-mono);">${agentMem}</strong>
         </div>
 
         <!-- Latency Probe Result -->
@@ -136,6 +157,12 @@ function renderFleetCards() {
       </div>
     `;
   }).join('');
+}
+
+function formatMB(mb) {
+  if (!mb || isNaN(mb)) return '0 MB';
+  if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+  return Math.round(mb) + ' MB';
 }
 
 function formatUptimeSec(sec) {

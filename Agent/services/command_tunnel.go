@@ -120,9 +120,9 @@ func StartCommandTunnel(conn *grpc.ClientConn, agentName, agentID, agentKey stri
 					continue
 				}
 
-				execCtx, excecCancel := context.WithTimeout(context.Background(), 15*time.Second)
+				execCtx, execCancel := context.WithTimeout(context.Background(), 15*time.Second)
 				out, execErr := exec.CommandContext(execCtx, "sh", "-c", rawCmd).CombinedOutput()
-				excecCancel()
+				execCancel()
 
 				exitCode := int32(0)
 				if execErr != nil {
@@ -149,10 +149,13 @@ func StartCommandTunnel(conn *grpc.ClientConn, agentName, agentID, agentKey stri
 
 // handleContainmentAction mengeksekusi aksi isolasi firewall iptables (PEP Zero-Trust)
 func handleContainmentAction(action string, reqMap map[string]string) (string, int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	if action == "containment_status" {
-		out, err := exec.Command("iptables", "-L", "INPUT", "-v", "-n").CombinedOutput()
+		out, err := exec.CommandContext(ctx, "iptables", "-w", "5", "-L", "INPUT", "-v", "-n").CombinedOutput()
 		if err != nil {
-			out, err = exec.Command("sudo", "iptables", "-L", "INPUT", "-v", "-n").CombinedOutput()
+			out, err = exec.CommandContext(ctx, "sudo", "-n", "iptables", "-w", "5", "-L", "INPUT", "-v", "-n").CombinedOutput()
 		}
 		if err != nil {
 			return fmt.Sprintf("[PEP-ERROR] Gagal membaca iptables: %v (%s)", err, string(out)), 1
@@ -178,18 +181,22 @@ func handleContainmentAction(action string, reqMap map[string]string) (string, i
 
 	switch action {
 	case "block_ip":
-		// 1. Cek apakah aturan DROP sudah ada di kernel
-		checkCmd := exec.Command("iptables", "-C", "INPUT", "-s", targetIP, "-j", "DROP")
+		// 1. Cek apakah aturan DROP sudah ada di kernel (langsung atau via sudo)
+		checkCmd := exec.CommandContext(ctx, "iptables", "-w", "5", "-C", "INPUT", "-s", targetIP, "-j", "DROP")
 		if err := checkCmd.Run(); err == nil {
+			return fmt.Sprintf("[PEP-CONTAINMENT] IP %s sudah berada dalam daftar blokir iptables DROP", targetIP), 0
+		}
+		sudoCheckCmd := exec.CommandContext(ctx, "sudo", "-n", "iptables", "-w", "5", "-C", "INPUT", "-s", targetIP, "-j", "DROP")
+		if err := sudoCheckCmd.Run(); err == nil {
 			return fmt.Sprintf("[PEP-CONTAINMENT] IP %s sudah berada dalam daftar blokir iptables DROP", targetIP), 0
 		}
 
 		// 2. Terapkan aturan iptables -I INPUT -s <IP> -j DROP
-		blockCmd := exec.Command("iptables", "-I", "INPUT", "-s", targetIP, "-j", "DROP")
+		blockCmd := exec.CommandContext(ctx, "iptables", "-w", "5", "-I", "INPUT", "-s", targetIP, "-j", "DROP")
 		out, err := blockCmd.CombinedOutput()
 		if err != nil {
-			// Fallback coba dengan sudo jika service non-root
-			sudoCmd := exec.Command("sudo", "iptables", "-I", "INPUT", "-s", targetIP, "-j", "DROP")
+			// Fallback coba dengan sudo -n jika service non-root
+			sudoCmd := exec.CommandContext(ctx, "sudo", "-n", "iptables", "-w", "5", "-I", "INPUT", "-s", targetIP, "-j", "DROP")
 			sudoOut, sudoErr := sudoCmd.CombinedOutput()
 			if sudoErr != nil {
 				return fmt.Sprintf("[PEP-ERROR] Gagal menjalankan iptables DROP untuk %s: %v (%s | %s)", targetIP, err, string(out), string(sudoOut)), 1
@@ -200,10 +207,10 @@ func handleContainmentAction(action string, reqMap map[string]string) (string, i
 
 	case "unblock_ip":
 		// Cek & hapus aturan iptables -D INPUT -s <IP> -j DROP
-		delCmd := exec.Command("iptables", "-D", "INPUT", "-s", targetIP, "-j", "DROP")
+		delCmd := exec.CommandContext(ctx, "iptables", "-w", "5", "-D", "INPUT", "-s", targetIP, "-j", "DROP")
 		out, err := delCmd.CombinedOutput()
 		if err != nil {
-			sudoCmd := exec.Command("sudo", "iptables", "-D", "INPUT", "-s", targetIP, "-j", "DROP")
+			sudoCmd := exec.CommandContext(ctx, "sudo", "-n", "iptables", "-w", "5", "-D", "INPUT", "-s", targetIP, "-j", "DROP")
 			sudoOut, sudoErr := sudoCmd.CombinedOutput()
 			if sudoErr != nil {
 				return fmt.Sprintf("[PEP-CONTAINMENT] IP %s tidak ditemukan atau gagal dihapus dari iptables: %s (direct: %s)", targetIP, string(sudoOut), string(out)), 1

@@ -330,6 +330,18 @@ body {
   width: 100%;
 }
 
+#shared-sidebar {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
 .main-column {
   min-width: 0;
   width: 100%;
@@ -338,6 +350,12 @@ body {
 @media (max-width: 960px) {
   .workspace-grid {
     grid-template-columns: 1fr;
+  }
+  #shared-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
   }
 }
 

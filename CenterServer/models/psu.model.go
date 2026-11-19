@@ -9,6 +9,7 @@ type DeviceStatus struct {
 	Platform    string    `json:"platform"`
 	UptimeSec   uint64    `json:"uptime_sec"`
 	CPUUsage    float64   `json:"cpu_usage"`
+	CPUCores    int       `json:"cpu_cores,omitempty"`
 	RAMTotalMB  uint64    `json:"ram_total_mb"`
 	RAMUsedMB   uint64    `json:"ram_used_mb"`
 	RAMUsedPct  float64   `json:"ram_used_pct"`

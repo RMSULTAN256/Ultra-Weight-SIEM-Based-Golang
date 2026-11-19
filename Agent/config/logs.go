@@ -88,41 +88,47 @@ var DefaultConfig = models.LogConfig{
 	},
 }
 
+// LoadConfig membaca dan mem-parse file konfigurasi target log.
+// Mengembalikan error jika file tidak ditemukan atau format JSON tidak valid.
 func LoadConfig(filePath string) (*models.LogConfig, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("file not found or unreadable: %w", err)
+	}
+
+	var cfg models.LogConfig
+	err = sonic.Unmarshal(data, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("format invalid: %w", err)
+	}
+	return &cfg, nil
+}
+
+// EnsureDefaultConfigFile membuat file konfigurasi default jika belum ada,
+// lalu memuat dan mengembalikan konfigurasinya.
+func EnsureDefaultConfigFile(filePath string) (*models.LogConfig, error) {
 	_, err := os.Stat(filePath)
 	if errors.Is(err, os.ErrNotExist) {
 		if dir := filepath.Dir(filePath); dir != "." {
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				return nil, fmt.Errorf("Gagal membuat folder path")
+				return nil, fmt.Errorf("gagal membuat folder path: %w", err)
 			}
 		}
 
 		data, err := sonic.MarshalIndent(DefaultConfig, "", "  ")
 		if err != nil {
-			return nil, fmt.Errorf("errors decode JSON")
+			return nil, fmt.Errorf("error decode JSON: %w", err)
 		}
 
 		data = append(data, '\n')
 
 		if err := os.WriteFile(filePath, data, 0644); err != nil {
-			return nil, fmt.Errorf("Gagal menuliskan file")
+			return nil, fmt.Errorf("gagal menuliskan file: %w", err)
 		}
 		cfg := DefaultConfig
-
 		return &cfg, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("gagal cek file: %w", err)
 	}
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("File not found: %w", err)
-	}
-
-	var cfg models.LogConfig
-
-	err = sonic.Unmarshal(data, &cfg)
-	if err != nil {
-		return nil, fmt.Errorf("Format invalid : %w", err)
-	}
-	return &cfg, nil
+	return LoadConfig(filePath)
 }

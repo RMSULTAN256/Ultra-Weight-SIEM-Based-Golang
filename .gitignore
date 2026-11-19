@@ -2,6 +2,8 @@
 .env
 *.env
 data/prod-1-only
+data/nodes.json
+nodes.json
 *.pem
 *.key
 id_*
@@ -14,6 +16,8 @@ id_*
 *.dylib
 *-linux
 *-app
+agentGo
+Agent/agentGo
 .agents
 .vscode
 

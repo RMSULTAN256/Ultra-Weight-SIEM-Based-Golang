@@ -27,6 +27,8 @@ func NewDBService(dbPath string) (*DBService, error) {
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	db.Exec("PRAGMA journal_mode=WAL;")
 
@@ -101,6 +103,7 @@ func (s *DBService) RegisterUser(username, plainPassword, role string) error {
 func (s *DBService) Authenticate(username, plainPassword string) (bool, string, error) {
 	var id int
 	var passwordHash, role string
+
 	query := `SELECT id, password_hash, role FROM users WHERE username = ?`
 	row := s.db.QueryRow(query, username)
 	err := row.Scan(&id, &passwordHash, &role)

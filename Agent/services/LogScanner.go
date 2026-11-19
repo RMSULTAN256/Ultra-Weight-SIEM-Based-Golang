@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,10 +24,16 @@ const InMemoryQueueCapacity = 1000
 type LogCollector struct {
 	ServerUrl, AgentName, AgentKey string
 	Client                         *http.Client
+	grpcMu                         sync.RWMutex
 	GRPCClient                     *GRPCClient
-	fileOffsets                    map[string]int64
+	stateMu                        sync.Mutex
 	state                          map[string]fileState
 	bufferQueue                    chan models.SecurityLog
+	stopCh                         chan struct{}
+	wg                             sync.WaitGroup
+	closeOnce                      sync.Once
+	closeMu                        sync.RWMutex
+	isClosed                       bool
 }
 
 type fileState struct {
@@ -96,9 +103,24 @@ func NewLogCollector(serverUrl, agentName, agentKey string) *LogCollector {
 		},
 		state:       make(map[string]fileState),
 		bufferQueue: make(chan models.SecurityLog, InMemoryQueueCapacity),
+		stopCh:      make(chan struct{}),
 	}
+	lc.wg.Add(1)
 	go lc.startQueueWorker()
 	return lc
+}
+
+// Close menghentikan worker queue secara bersih dan menutup bufferQueue untuk mencegah kebocoran goroutine.
+func (ls *LogCollector) Close() {
+	ls.closeOnce.Do(func() {
+		ls.closeMu.Lock()
+		ls.isClosed = true
+		close(ls.stopCh)
+		close(ls.bufferQueue)
+		ls.closeMu.Unlock()
+
+		ls.wg.Wait()
+	})
 }
 
 func (lg *LogCollector) ScanTarget(target models.TargetConfig) {
@@ -107,38 +129,72 @@ func (lg *LogCollector) ScanTarget(target models.TargetConfig) {
 		return
 	}
 
+	matchedFiles := make(map[string]struct{}, len(files))
 	for _, file := range files {
+		matchedFiles[file] = struct{}{}
 		lg.processFile(file, target)
 	}
+
+	// Prune stale / deleted file entries from state to prevent unbounded memory growth
+	lg.stateMu.Lock()
+	for recordedPath := range lg.state {
+		if _, exists := matchedFiles[recordedPath]; !exists {
+			if _, statErr := os.Stat(recordedPath); os.IsNotExist(statErr) {
+				delete(lg.state, recordedPath)
+			}
+		}
+	}
+	lg.stateMu.Unlock()
 }
 
 func (ls *LogCollector) processFile(path string, target models.TargetConfig) {
+	ls.stateMu.Lock()
+	st, ok := ls.state[path]
+	ls.stateMu.Unlock()
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	ino := inodeOff(fi)
+
+	switch {
+	case !ok:
+		ls.stateMu.Lock()
+		ls.state[path] = fileState{Inode: ino, Offset: fi.Size()}
+		ls.stateMu.Unlock()
+		return
+	case st.Inode != ino || fi.Size() < st.Offset:
+		st = fileState{Inode: ino, Offset: 0}
+	}
+
+	// Jika tidak ada data baru, hindari alokasi buffer 64KB dan pembukaan file yang sia-sia
+	if fi.Size() <= st.Offset {
+		ls.stateMu.Lock()
+		ls.state[path] = st
+		ls.stateMu.Unlock()
+		return
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return
-	}
-	ino := inodeOff(fi)
-	st, ok := ls.state[path]
-	switch {
-	case !ok:
-		ls.state[path] = fileState{Inode: ino, Offset: fi.Size()}
-		return
-	case st.Inode != ino || fi.Size() < st.Offset:
-		st = fileState{Inode: ino, Offset: 0}
-	}
-	if fi.Size() == st.Offset {
-		ls.state[path] = st
-		return
-	}
+
 	if _, err := f.Seek(st.Offset, io.SeekStart); err != nil {
 		return
 	}
-	r := bufio.NewReaderSize(f, 64*1024)
+
+	remaining := fi.Size() - st.Offset
+	bufSize := int(remaining)
+	if bufSize > 64*1024 {
+		bufSize = 64 * 1024
+	} else if bufSize < 4096 {
+		bufSize = 4096
+	}
+
+	r := bufio.NewReaderSize(f, bufSize)
 	for {
 		line, err := r.ReadString('\n')
 		if !strings.HasSuffix(line, "\n") {
@@ -153,7 +209,10 @@ func (ls *LogCollector) processFile(path string, target models.TargetConfig) {
 			break // EOF
 		}
 	}
+
+	ls.stateMu.Lock()
 	ls.state[path] = st
+	ls.stateMu.Unlock()
 }
 
 func (ls *LogCollector) handleLine(rawLine string, target models.TargetConfig) error {
@@ -198,6 +257,14 @@ func (ls *LogCollector) handleLine(rawLine string, target models.TargetConfig) e
 		Status:    status,
 		Service:   target.AppName,
 	}
+
+	ls.closeMu.RLock()
+	if ls.isClosed {
+		ls.closeMu.RUnlock()
+		return fmt.Errorf("log collector closed")
+	}
+	defer ls.closeMu.RUnlock()
+
 	select {
 	case ls.bufferQueue <- secLog:
 		return nil
@@ -207,18 +274,30 @@ func (ls *LogCollector) handleLine(rawLine string, target models.TargetConfig) e
 }
 
 func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
+	select {
+	case <-ls.stopCh:
+		return fmt.Errorf("log collector closed")
+	default:
+	}
+
 	jsonData, err := sonic.Marshal(log)
 	if err != nil {
 		return err
 	}
-	if ls.GRPCClient != nil && ls.GRPCClient.logStream != nil {
-		err = ls.GRPCClient.logStream.Send(&proto.LogPacket{
+
+	grpcClient := ls.GetGRPCClient()
+	if grpcClient != nil {
+		err = grpcClient.SendLog(&proto.LogPacket{
 			AgentName:   ls.AgentName,
 			PayloadJson: jsonData,
 		})
 		if err == nil {
 			return nil
 		}
+	}
+
+	if ls.Client == nil {
+		ls.Client = &http.Client{Timeout: 5 * time.Second}
 	}
 
 	endPoint := ls.ServerUrl + "/api/v1/agent/logs"
@@ -236,17 +315,45 @@ func (ls *LogCollector) sendLogToCenter(log models.SecurityLog) error {
 	if err != nil {
 		return fmt.Errorf("gRPC & HTTP fallback gagal: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("HTTP fallback server error response status: %d", resp.StatusCode)
+	}
+
 	return nil
 }
+
+// GetGRPCClient mengambil referensi GRPCClient secara thread-safe
+func (ls *LogCollector) GetGRPCClient() *GRPCClient {
+	ls.grpcMu.RLock()
+	defer ls.grpcMu.RUnlock()
+	return ls.GRPCClient
+}
+
 func (ls *LogCollector) SetGRPCClient(client *GRPCClient) {
+	ls.grpcMu.Lock()
+	defer ls.grpcMu.Unlock()
 	ls.GRPCClient = client
 }
 
 func (ls *LogCollector) startQueueWorker() {
+	defer ls.wg.Done()
 	for secLog := range ls.bufferQueue {
+		select {
+		case <-ls.stopCh:
+			return
+		default:
+		}
 		if err := ls.sendLogToCenter(secLog); err != nil {
-			time.Sleep(200 * time.Millisecond)
+			select {
+			case <-ls.stopCh:
+				return
+			case <-time.After(200 * time.Millisecond):
+			}
 		}
 	}
 }

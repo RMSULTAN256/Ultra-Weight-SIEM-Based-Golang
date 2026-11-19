@@ -23,95 +23,87 @@ import (
 // dari CenterServer. Semua field bisa di-override lewat environment variable,
 // supaya IP/host/user tidak lagi hardcoded di source.
 type NodeSSHConfig struct {
-	// AgentID adalah ID yang dikirim heartbeat (biasanya hostname / hostname-IP).
-	AgentID string
-	// Aliases adalah ID/IP tambahan yang diterima APA ADANYA (exact match).
-	// Tanpa pencocokan substring: salah tulis = 404, bukan nyasar ke host lain.
-	Aliases []string
-	Addr    string
-	User    string
-	KeyPath string
-	// KnownHosts dipakai untuk verifikasi host key. Wajib bisa dibaca,
-	// kecuali HostKeyPin diisi (mode pinning, lebih cocok untuk container).
-	KnownHosts string
-	// HostKeyPin (opsional) = "SHA256:..." dari `ssh-keygen -lf known_hosts`.
-	// Kalau diisi, pin ini yang menang dan KnownHosts tidak perlu ada.
-	HostKeyPin  string
-	ServiceName string
+	AgentID     string   `json:"agent_id"`
+	Aliases     []string `json:"aliases"`
+	Addr        string   `json:"addr"`
+	User        string   `json:"user"`
+	KeyPath     string   `json:"key_path,omitempty"`
+	KnownHosts  string   `json:"known_hosts,omitempty"`
+	HostKeyPin  string   `json:"host_key_pin,omitempty"`
+	ServiceName string   `json:"service_name,omitempty"`
 }
 
-var NodeSSHMap = map[string]NodeSSHConfig{
-	"ubuntu": {
-		AgentID:     "ubuntu",
-		Aliases:     splitAliases(envOr("SSH_NODE1_ALIASES", "ubuntu-1,ubuntu-31.56.56.50,31.56.56.50")),
-		Addr:        envOr("SSH_NODE1_ADDR", "31.56.56.50:30061"),
-		User:        envOr("SSH_NODE1_USER", "root"),
-		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
-		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
-		HostKeyPin:  os.Getenv("SSH_NODE1_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE1_SERVICE", "AgentGo"),
-	},
-	"ubuntu-2": {
-		AgentID:     "ubuntu-2",
-		Aliases:     splitAliases(envOr("SSH_NODE2_ALIASES", "ubuntu-163.52.135.170,163.52.135.170")),
-		Addr:        envOr("SSH_NODE2_ADDR", "163.52.135.170:27151"),
-		User:        envOr("SSH_NODE2_USER", "ubuntu"),
-		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
-		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
-		HostKeyPin:  os.Getenv("SSH_NODE2_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE2_SERVICE", "agentGo"),
-	},
-	"ubuntu-3": {
-		AgentID:     "ubuntu-3",
-		Aliases:     splitAliases(envOr("SSH_NODE3_ALIASES", "ubuntu-3,172.237.82.192,ubuntu-172.237.82.192,2600:3c15::2000:86ff:fea5:b4de,86b16e64-3e83-4397-a343-d5768b96b93a")),
-		Addr:        envOr("SSH_NODE3_ADDR", "172.237.82.192:22"),
-		User:        envOr("SSH_NODE3_USER", "root"),
-		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
-		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
-		HostKeyPin:  os.Getenv("SSH_NODE3_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE3_SERVICE", "agentGo"),
-	},
-	"ubuntu-4": {
-		AgentID:     "ubuntu-4",
-		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.232.226.86,ubuntu-172.232.226.86,2600:3c0c::2000:baff:fe35:c41e,a6092f4c-1195-4d4f-92a5-b9fe92a8204f")),
-		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
-		User:        envOr("SSH_NODE4_USER", "root"),
-		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
-		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
-		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
-	},
-	"ubuntu-5": {
-		AgentID:     "ubuntu-4",
-		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.235.251.146,ubuntu-172.235.251.146,2600:3c0c::2000:bfff:fe6d:fcc0,4860ad47-89e7-43b7-ad40-e9bcc43d43db")),
-		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
-		User:        envOr("SSH_NODE4_USER", "root"),
-		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
-		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
-		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
-	},
-	"ubuntu-6": {
-		AgentID:     "ubuntu-4",
-		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.232.226.86,ubuntu-172.232.226.86,2600:3c0c::2000:baff:fe35:c41e,a6092f4c-1195-4d4f-92a5-b9fe92a8204f")),
-		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
-		User:        envOr("SSH_NODE4_USER", "root"),
-		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
-		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
-		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
-	},
-	"ubuntu-7": {
-		AgentID:     "ubuntu-4",
-		Aliases:     splitAliases(envOr("SSH_NODE4_ALIASES", "ubuntu-4,172.232.226.86,ubuntu-172.232.226.86,2600:3c0c::2000:baff:fe35:c41e,a6092f4c-1195-4d4f-92a5-b9fe92a8204f")),
-		Addr:        envOr("SSH_NODE4_ADDR", "172.232.226.86:22"),
-		User:        envOr("SSH_NODE4_USER", "root"),
-		KeyPath:     envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only")),
-		KnownHosts:  envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts")),
-		HostKeyPin:  os.Getenv("SSH_NODE4_HOSTKEY_PIN"),
-		ServiceName: envOr("SSH_NODE4_SERVICE", "agentGo"),
-	},
+func loadNodeSSHMap() map[string]NodeSSHConfig {
+	configPath := os.Getenv("NODES_CONFIG_PATH")
+	if configPath == "" {
+		candidates := []string{
+			"/app/data/nodes.json",
+			"data/nodes.json",
+			"../data/nodes.json",
+			"../../data/nodes.json",
+		}
+		for _, p := range candidates {
+			if _, err := os.Stat(p); err == nil {
+				configPath = p
+				break
+			}
+		}
+	}
+
+	defaultKey := envOr("SSH_KEY_PATH", os.ExpandEnv("$HOME/.ssh/prod-1-only"))
+	defaultKnownHosts := envOr("SSH_KNOWN_HOSTS", os.ExpandEnv("$HOME/.ssh/known_hosts"))
+
+	resMap := make(map[string]NodeSSHConfig)
+	if configPath != "" {
+		if raw, err := os.ReadFile(configPath); err == nil {
+			if err := sonic.Unmarshal(raw, &resMap); err == nil && len(resMap) > 0 {
+				for k, node := range resMap {
+					if node.AgentID == "" {
+						node.AgentID = k
+					}
+					if node.KeyPath == "" {
+						node.KeyPath = defaultKey
+					}
+					if node.KnownHosts == "" {
+						node.KnownHosts = defaultKnownHosts
+					}
+					if node.ServiceName == "" {
+						node.ServiceName = "agentGo"
+					}
+					resMap[k] = node
+				}
+				log.Printf("[ssh-exec] Berhasil memuat %d node dari konfigurasi %s (clean zero-leak)", len(resMap), configPath)
+				return resMap
+			}
+		}
+	}
+
+	// Fallback aman jika file nodes.json tidak ditemukan: hanya placeholder dummy, tanpa leak IP asli
+	return map[string]NodeSSHConfig{
+		"ubuntu": {
+			AgentID:     "ubuntu",
+			Aliases:     splitAliases(envOr("SSH_NODE1_ALIASES", "ubuntu-1,127.0.0.1")),
+			Addr:        envOr("SSH_NODE1_ADDR", "127.0.0.1:22"),
+			User:        envOr("SSH_NODE1_USER", "root"),
+			KeyPath:     defaultKey,
+			KnownHosts:  defaultKnownHosts,
+			HostKeyPin:  os.Getenv("SSH_NODE1_HOSTKEY_PIN"),
+			ServiceName: envOr("SSH_NODE1_SERVICE", "AgentGo"),
+		},
+		"ubuntu-2": {
+			AgentID:     "ubuntu-2",
+			Aliases:     splitAliases(envOr("SSH_NODE2_ALIASES", "ubuntu-2,127.0.0.1")),
+			Addr:        envOr("SSH_NODE2_ADDR", "127.0.0.1:22"),
+			User:        envOr("SSH_NODE2_USER", "ubuntu"),
+			KeyPath:     defaultKey,
+			KnownHosts:  defaultKnownHosts,
+			HostKeyPin:  os.Getenv("SSH_NODE2_HOSTKEY_PIN"),
+			ServiceName: envOr("SSH_NODE2_SERVICE", "agentGo"),
+		},
+	}
 }
+
+var NodeSSHMap = loadNodeSSHMap()
 
 // WhitelistCommands: perintah read-only yang tidak bergantung pada ServiceName.
 var WhitelistCommands = map[string]string{

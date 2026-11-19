@@ -4,12 +4,17 @@ import (
 	"Agent/models"
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
+	"time"
 
 	"github.com/bytedance/sonic"
 )
 
 func SendHeartbeat(client *http.Client, url string, status *models.DeviceStatus) error {
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
 	jsonData, err := sonic.Marshal(status)
 	if err != nil {
 		return err
@@ -25,7 +30,10 @@ func SendHeartbeat(client *http.Client, url string, status *models.DeviceStatus)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server merespons error status: %d", resp.StatusCode)

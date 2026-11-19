@@ -441,3 +441,89 @@ func TestSetGRPCClient(t *testing.T) {
 		t.Error("SetGRPCClient(nil) harus mengosongkan client")
 	}
 }
+
+func TestLogCollectorClose(t *testing.T) {
+	srv, _ := newLogSink(t)
+	lc := NewLogCollector(srv.URL, "agent-uji", "")
+
+	// Kirim satu log sebelum Close
+	if err := lc.handleLine("test log before close", models.TargetConfig{AppName: "app"}); err != nil {
+		t.Fatalf("handleLine gagal: %v", err)
+	}
+
+	// Close pertama kali harus sukses menghentikan worker
+	lc.Close()
+
+	// Close kedua kali (idempotent) tidak boleh panic
+	lc.Close()
+
+	// Setelah closed, handleLine harus mengembalikan error, bukan panic
+	if err := lc.handleLine("test log after close", models.TargetConfig{AppName: "app"}); err == nil {
+		t.Error("handleLine setelah Close seharusnya mengembalikan error")
+	}
+}
+
+func TestLogCollectorClose_Concurrent(t *testing.T) {
+	srv, _ := newLogSink(t)
+	lc := NewLogCollector(srv.URL, "agent-uji", "")
+
+	const numWorkers = 10
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+
+	for i := 0; i < numWorkers; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				_ = lc.handleLine("concurrent line", models.TargetConfig{AppName: "app"})
+			}
+		}(i)
+	}
+
+	// Trigger close concurrently with workers producing logs
+	time.Sleep(5 * time.Millisecond)
+	lc.Close()
+
+	wg.Wait()
+}
+
+func TestScanTargetStatePruning(t *testing.T) {
+	dir := t.TempDir()
+	f1 := filepath.Join(dir, "active.log")
+	f2 := filepath.Join(dir, "rotated.log")
+
+	if err := os.WriteFile(f1, []byte("baris 1\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f2, []byte("baris 2\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	lc := NewLogCollector("http://127.0.0.1:0", "agent-uji", "")
+	defer lc.Close()
+
+	target := models.TargetConfig{AppName: "app", FilePath: filepath.Join(dir, "*.log")}
+	lc.ScanTarget(target)
+
+	if len(lc.state) != 2 {
+		t.Fatalf("state awal harus mencatat 2 file, tercatat %d", len(lc.state))
+	}
+
+	// Hapus file f2 dari disk (simulasi rotasi / pembersihan log)
+	if err := os.Remove(f2); err != nil {
+		t.Fatal(err)
+	}
+
+	// ScanTarget berikutnya harus mem-prune f2 dari lc.state
+	lc.ScanTarget(target)
+
+	if len(lc.state) != 1 {
+		t.Errorf("state setelah f2 dihapus harus 1, dapat %d", len(lc.state))
+	}
+	if _, exists := lc.state[f2]; exists {
+		t.Errorf("file f2 yang sudah dihapus masih ada di lc.state")
+	}
+	if _, exists := lc.state[f1]; !exists {
+		t.Errorf("file f1 yang aktif hilang dari lc.state")
+	}
+}

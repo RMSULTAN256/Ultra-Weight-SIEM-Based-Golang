@@ -4,6 +4,7 @@ import (
 	"Agent/models"
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime"
@@ -97,6 +98,7 @@ func (mc *MetricCollector) CollectMetrics() (*models.DeviceStatus, error) {
 		Platform:    fmt.Sprintf("%s %s", hInfo.Platform, hInfo.PlatformVersion),
 		UptimeSec:   hInfo.Uptime,
 		CPUUsage:    cpuVal,
+		CPUCores:    runtime.NumCPU(),
 		RAMTotalMB:  totalRAMMB,
 		RAMUsedMB:   usedRAMMB,
 		RAMUsedPct:  usedPct,
@@ -107,6 +109,9 @@ func (mc *MetricCollector) CollectMetrics() (*models.DeviceStatus, error) {
 }
 
 func (mc *MetricCollector) Send(status *models.DeviceStatus) error {
+	if mc.Client == nil {
+		mc.Client = &http.Client{Timeout: 5 * time.Second}
+	}
 	jsonData, err := sonic.Marshal(status)
 	if err != nil {
 		return err
@@ -127,14 +132,24 @@ func (mc *MetricCollector) Send(status *models.DeviceStatus) error {
 		return err
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
 
 	mc.lastLatencyMs = float64(time.Since(start).Microseconds()) / 1000.0
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("server merespons error status: %d", resp.StatusCode)
+	}
 
 	return nil
 }
 
 func (mc *MetricCollector) TestConnection() (time.Duration, error) {
+	if mc.Client == nil {
+		mc.Client = &http.Client{Timeout: 5 * time.Second}
+	}
 	start := time.Now()
 
 	resp, err := mc.Client.Get(mc.ServerUrl + "/api/v1/agents")
@@ -142,7 +157,14 @@ func (mc *MetricCollector) TestConnection() (time.Duration, error) {
 		return 0, fmt.Errorf("Server unreachable: %w", err)
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return 0, fmt.Errorf("server merespons error status: %d", resp.StatusCode)
+	}
 
 	rtt := time.Since(start)
 	return rtt, nil

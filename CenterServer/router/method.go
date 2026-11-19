@@ -149,6 +149,8 @@ func (sc *HandleService) HandleIncomingLog(c fiber.Ctx) error {
 
 	secLog = sc.siemService.CorrelateLog(secLog)
 
+	services.NotifyGatherAlert(secLog)
+
 	threat := "Normal"
 	if secLog.Severity >= 12 {
 		threat = "Critical"
@@ -412,10 +414,20 @@ func (sc *HandleService) HandleStream(c fiber.Ctx) error {
 		sc.siemService.AddClient(msgChan)
 		defer sc.siemService.RemoveClient(msgChan)
 
-		for msg := range msgChan {
-			fmt.Fprintf(w, "data: %s\n\n", msg)
-			if err := w.Flush(); err != nil {
+		ctx := c.Context()
+
+		for {
+			select {
+			case <-ctx.Done():
 				return
+			case msg, ok := <-msgChan:
+				if !ok {
+					return
+				}
+				fmt.Fprintf(w, "data: %s\n\n", msg)
+				if err := w.Flush(); err != nil {
+					return
+				}
 			}
 		}
 	})

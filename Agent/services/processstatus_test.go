@@ -140,6 +140,19 @@ func TestMetricCollectorSendTanpaKey(t *testing.T) {
 	}
 }
 
+func TestMetricCollectorSendNon200Status(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+
+	mc := NewMetricCollector("agent-uji", srv.URL+"/api/v1/agent/heartbeat", 0, "kunci-salah")
+	err := mc.Send(&models.DeviceStatus{Hostname: "uji"})
+	if err == nil {
+		t.Fatal("Send harus mengembalikan error saat status code HTTP 401")
+	}
+}
+
 func TestMetricCollectorSendURLTidakValid(t *testing.T) {
 	mc := NewMetricCollector("agent-uji", "://bukan-url", 0, "kunci")
 

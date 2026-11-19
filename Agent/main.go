@@ -29,7 +29,10 @@ func main() {
 	collector := services.NewMetricCollector(agentClient, heartBeatUrl, 0, agentKey)
 	logCfg, err := config.LoadConfig("config/log_collector.json")
 	if err != nil {
-		fmt.Println("Failed to load, logs config not found")
+		logCfg, err = config.EnsureDefaultConfigFile("config/log_collector.json")
+		if err != nil {
+			fmt.Printf("Failed to load or create logs config: %v\n", err)
+		}
 	}
 
 	logScanner := services.NewLogCollector(baseURL, agentClient, agentKey)
@@ -50,6 +53,13 @@ func main() {
 		}
 		services.StartCommandTunnel(grpcClient.GetConn(), agentClient, agentID, agentKey)
 	}
+
+	defer func() {
+		logScanner.Close()
+		if grpcClient != nil {
+			_ = grpcClient.Close()
+		}
+	}()
 	if logCfg != nil {
 		scanInterval := logCfg.ScanIntervalSec
 		interval := 5 * time.Second

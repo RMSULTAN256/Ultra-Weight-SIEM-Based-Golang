@@ -66,19 +66,12 @@ var defaultCorrelationRules = []correlationRule{
 		mitreID:     "T1110.001 Brute Force",
 		description: "Database Authentication Brute Force Detected",
 	},
-	{
-		id:          "RULE-DB-BRUTEFORCE",
-		eventType:   "db_auth_failure",
-		window:      60 * time.Second,
-		threshold:   5,
-		targetSev:   12, // Critical
-		mitreID:     "T1110.001 Brute Force",
-		description: "Database Authentication Brute Force Detected",
-	},
 }
 
 type SIEMService struct {
-	db        *databases.DBService
+	db          *databases.DBService
+	ipWriteChan chan models.IPTrafficRecord
+
 	clientsMu sync.Mutex
 	clients   map[chan string]bool
 
@@ -105,6 +98,7 @@ func NewSIEMService(dbs ...*databases.DBService) *SIEMService {
 
 	svc := &SIEMService{
 		db:            db,
+		ipWriteChan:   make(chan models.IPTrafficRecord, 1024),
 		clients:       make(map[chan string]bool),
 		ipRecords:     make(map[string]*models.IPTrafficRecord),
 		agents:        make(map[string]*models.DeviceStatus),
@@ -117,6 +111,11 @@ func NewSIEMService(dbs ...*databases.DBService) *SIEMService {
 				svc.ipRecords[rec.IP] = rec
 			}
 		}
+		go func() {
+			for rec := range svc.ipWriteChan {
+				_ = svc.db.UpsertIP(&rec)
+			}
+		}()
 	}
 	svc.loadInitialData()
 	return svc
@@ -469,36 +468,32 @@ func (s *SIEMService) RecordIP(ip string, hostname string, category string, thre
 
 	copyRec := *rec
 
-	if s.db != nil {
-		go func(r models.IPTrafficRecord, lookUp bool) {
-			if lookUp {
-				if cName, cCode, cCity, cIsp, cLat, cLon, ok := fetchGeoIPOnline(r.IP); ok {
-					r.Country = cName
-					r.CountryCode = cCode
-					r.City = cCity
-					r.ISP = cIsp
-					r.Lat = cLat
-					r.Lon = cLon
+	if needGeoLookup {
+		go func(r models.IPTrafficRecord) {
+			if cName, cCode, cCity, cIsp, cLat, cLon, ok := fetchGeoIPOnline(r.IP); ok {
+				s.ipMu.Lock()
+				if memRec, okMem := s.ipRecords[r.IP]; okMem {
+					memRec.Country = cName
+					memRec.CountryCode = cCode
+					memRec.City = cCity
+					memRec.ISP = cIsp
+					memRec.Lat = cLat
+					memRec.Lon = cLon
+					r = *memRec
+				}
+				s.ipMu.Unlock()
 
-					s.ipMu.Lock()
-					if memRec, okMem := s.ipRecords[r.IP]; okMem {
-						memRec.Country = cName
-						memRec.CountryCode = cCode
-						memRec.City = cCity
-						memRec.ISP = cIsp
-						memRec.Lat = cLat
-						memRec.Lon = cLon
-					}
-					s.ipMu.Unlock()
-
-					if ipBytes, err := sonic.Marshal(fiber.Map{"event_type": "IP_UPDATE", "data": r}); err == nil {
-						s.Broadcast(string(ipBytes))
-					}
+				if ipBytes, err := sonic.Marshal(fiber.Map{"event_type": "IP_UPDATE", "data": r}); err == nil {
+					s.Broadcast(string(ipBytes))
 				}
 			}
-
-			_ = s.db.UpsertIP(&r)
-		}(copyRec, needGeoLookup)
+		}(copyRec)
+	}
+	if s.db != nil && s.ipWriteChan != nil {
+		select {
+		case s.ipWriteChan <- copyRec:
+		default:
+		}
 	}
 	return &copyRec
 }
@@ -556,10 +551,12 @@ func (s *SIEMService) SetBlockIPStatus(ip string, blocked bool) (*models.IPTraff
 	}
 
 	copyRec := *rec
-	if s.db != nil {
-		go func(r models.IPTrafficRecord) {
-			_ = s.db.UpsertIP(&r)
-		}(copyRec)
+	if s.db != nil && s.ipWriteChan != nil {
+		select {
+		case s.ipWriteChan <- copyRec:
+		default:
+			_ = s.db.UpsertIP(&copyRec)
+		}
 	}
 	return &copyRec, true
 }
@@ -667,12 +664,17 @@ var geoCache sync.Map
 func fetchGeoIPOnline(ip string) (country, code, city, isp string, lat, lon float64, ok bool) {
 	if val, found := geoCache.Load(ip); found {
 		res := val.(geoResult)
+
+		if res.CountryCode == "XX-FAILED" {
+			return "", "", "", "", 0, 0, false
+		}
 		return res.Country, res.CountryCode, res.City, res.ISP, res.Lat, res.Lon, true
 	}
 
 	client := http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Get("http://ip-api.com/json/" + ip + "?fields=status,country,countryCode,city,isp,lat,lon")
 	if err != nil || resp.StatusCode != http.StatusOK {
+		geoCache.Store(ip, geoResult{CountryCode: "XX-FAILED"})
 		return "", "", "", "", 0, 0, false
 	}
 	defer resp.Body.Close()
@@ -699,5 +701,6 @@ func fetchGeoIPOnline(ip string) (country, code, city, isp string, lat, lon floa
 		geoCache.Store(ip, gr)
 		return gr.Country, gr.CountryCode, gr.City, gr.ISP, gr.Lat, gr.Lon, true
 	}
+	geoCache.Store(ip, geoResult{CountryCode: "XX-FAILED"})
 	return "", "", "", "", 0, 0, false
 }
