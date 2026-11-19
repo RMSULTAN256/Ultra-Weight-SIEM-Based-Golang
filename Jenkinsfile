@@ -85,9 +85,9 @@ pipeline {
 
                             echo "===> [DEPLOY] Mengirim agent ke root@$TARGET_HOST:$TARGET_PORT..."
                             
-                            # Step A: Stop service & siapkan folder config
+                            # Step A: Stop service, kill rogue process jika ada, & hapus file lama agar tidak 'Text file busy'
                             sshpass -p "$TARGET_PASS" ssh -F /dev/null -p "$TARGET_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 root@"$TARGET_HOST" \
-                                "mkdir -p /root/Agent/config && (systemctl stop agentGo || systemctl stop agentGo || true)"
+                                "mkdir -p /root/Agent/config && (systemctl stop agentGo || systemctl stop AgentGo || true) 2>/dev/null; (pkill -9 -f AgentServerOnline || true); rm -f /root/Agent/AgentServerOnline"
                             
                             # Step B: Copy binary & file konfigurasi
                             sshpass -p "$TARGET_PASS" scp -F /dev/null -P "$TARGET_PORT" -o StrictHostKeyChecking=no \
@@ -97,7 +97,7 @@ pipeline {
                             
                             # Step C: Set permission & start service kembali
                             sshpass -p "$TARGET_PASS" ssh -F /dev/null -p "$TARGET_PORT" -o StrictHostKeyChecking=no root@"$TARGET_HOST" \
-                                "chmod +x /root/Agent/AgentServerOnline && (systemctl start agentGo || systemctl start agentGo)"
+                                "chmod +x /root/Agent/AgentServerOnline && (systemctl start agentGo || systemctl start AgentGo || true) 2>/dev/null"
                             
                             echo "===> [OK] Selesai deploy ke root@$TARGET_HOST"
                         }
@@ -108,14 +108,18 @@ pipeline {
                         # 2. Deploy ke Prod-2 (Server Non-Root via vps-password)
                         echo "===> [DEPLOY] Mengirim agent ke $PROD2_USER@$PROD_2_HOST:$PROD_2_PORT..."
                         sshpass -p "$PROD2_PASS" ssh -F /dev/null -p "$PROD_2_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 $PROD2_USER@"$PROD_2_HOST" \
-                            "mkdir -p /home/ubuntu/project/config && echo '$PROD2_PASS' | sudo -S systemctl stop agentGo"
+                            "mkdir -p /home/ubuntu/Agent/config /home/ubuntu/project/config && echo '$PROD2_PASS' | sudo -S systemctl stop agentGo 2>/dev/null || true; (pkill -9 -f AgentServerOnline || true); rm -f /home/ubuntu/Agent/AgentServerOnline /home/ubuntu/project/AgentServerOnline"
 
+                        sshpass -p "$PROD2_PASS" scp -F /dev/null -P "$PROD_2_PORT" -o StrictHostKeyChecking=no \
+                            AgentServerOnline $PROD2_USER@"$PROD_2_HOST":/home/ubuntu/Agent/
+                        sshpass -p "$PROD2_PASS" scp -F /dev/null -P "$PROD_2_PORT" -o StrictHostKeyChecking=no \
+                            config/log_collector.json $PROD2_USER@"$PROD_2_HOST":/home/ubuntu/Agent/config/
                         sshpass -p "$PROD2_PASS" scp -F /dev/null -P "$PROD_2_PORT" -o StrictHostKeyChecking=no \
                             AgentServerOnline $PROD2_USER@"$PROD_2_HOST":/home/ubuntu/project/
                         sshpass -p "$PROD2_PASS" scp -F /dev/null -P "$PROD_2_PORT" -o StrictHostKeyChecking=no \
                             config/log_collector.json $PROD2_USER@"$PROD_2_HOST":/home/ubuntu/project/config/
                         sshpass -p "$PROD2_PASS" ssh -F /dev/null -p "$PROD_2_PORT" -o StrictHostKeyChecking=no $PROD2_USER@"$PROD_2_HOST" \
-                            "chmod +x /home/ubuntu/project/AgentServerOnline && echo '$PROD2_PASS' | sudo -S systemctl start agentGo"
+                            "chmod +x /home/ubuntu/Agent/AgentServerOnline /home/ubuntu/project/AgentServerOnline && echo '$PROD2_PASS' | sudo -S systemctl start agentGo"
                         echo "===> [OK] Selesai deploy ke $PROD2_USER@$PROD_2_HOST"
 
                         # 3. Deploy ke Prod-3 (Server Root via VPS-AMANE)
