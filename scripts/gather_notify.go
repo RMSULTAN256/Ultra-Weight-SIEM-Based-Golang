@@ -86,7 +86,7 @@ func main() {
 	}
 	gatherSecret := os.Getenv("GATHER_WEBHOOK_SECRET")
 	if gatherSecret == "" {
-		gatherSecret = "whsec_Z2F01hD923RXXrmx7DNEe15BvSydhH/JUb0+Fbkqq6M="
+		gatherSecret = "whsec_Z2F00oMyO2+A2xPiYJYZy+jVE/jBLf8vAYTzS9pv7xE="
 	}
 
 	if *stateFlag != "" {
