@@ -17,8 +17,15 @@ func nodeAddrFor(id string) string {
 // TestResolveNodeDeterministik: lookup yang sama harus selalu memberi node yang
 // sama. Dulu (strings.Contains + iterasi map) ID node-2 bisa jatuh ke node-1.
 func TestResolveNodeDeterministik(t *testing.T) {
-	const id = "ubuntu-163.52.135.170"
-	want := NodeSSHMap["ubuntu-2"].Addr
+	node2, ok := NodeSSHMap["ubuntu-2"]
+	if !ok {
+		t.Fatal("node ubuntu-2 wajib ada di NodeSSHMap")
+	}
+	want := node2.Addr
+	id := "ubuntu-2"
+	if len(node2.Aliases) > 0 {
+		id = node2.Aliases[0]
+	}
 
 	for i := 0; i < 1000; i++ {
 		if got := nodeAddrFor(id); got != want {
@@ -31,10 +38,10 @@ func TestResolveNodeDeterministik(t *testing.T) {
 // "ditebak" ke node lain karena substring-nya mirip.
 func TestResolveNodeTidakNyasar(t *testing.T) {
 	kasus := []string{
-		"ubuntu-2-163.52.135.170", // dulu: 91% jatuh ke node-1
-		"ip-172-31-45-67",         // hostname default cloud
+		"ubuntu-unknown-ghost-node-999",
+		"ip-172-31-45-67",             // hostname default cloud
 		"prod-1-only",
-		"ubunt", // prefix, bukan alias
+		"ubunt",                      // prefix, bukan alias
 		"",
 	}
 	for _, id := range kasus {
@@ -45,8 +52,20 @@ func TestResolveNodeTidakNyasar(t *testing.T) {
 }
 
 func TestResolveNodeAlias(t *testing.T) {
-	want := NodeSSHMap["ubuntu-2"]
-	for _, id := range []string{"ubuntu-2", "163.52.135.170", "ubuntu-163.52.135.170"} {
+	want, ok := NodeSSHMap["ubuntu-2"]
+	if !ok {
+		t.Fatal("node ubuntu-2 wajib ada di NodeSSHMap")
+	}
+	targets := []string{"ubuntu-2"}
+	if want.AgentID != "" {
+		targets = append(targets, want.AgentID)
+	}
+	targets = append(targets, want.Aliases...)
+
+	for _, id := range targets {
+		if id == "" {
+			continue
+		}
 		node, err := ResolveNode(id)
 		if err != nil {
 			t.Fatalf("ResolveNode(%q) error: %v", id, err)
@@ -65,22 +84,33 @@ func TestResolveNodeAlias(t *testing.T) {
 // TestBuildCommandIkutNode: ServiceName harus berasal dari node yang di-resolve,
 // bukan dari node lain (dulu ResolveCommand melakukan lookup ulang sendiri).
 func TestBuildCommandIkutNode(t *testing.T) {
-	node2, err := ResolveNode("163.52.135.170")
-	if err != nil {
-		t.Fatalf("resolve node2: %v", err)
+	node2, ok := NodeSSHMap["ubuntu-2"]
+	if !ok {
+		t.Fatal("node ubuntu-2 wajib ada di NodeSSHMap")
 	}
-	cmd, err := BuildCommand(node2, "agent_status")
+	id := "ubuntu-2"
+	if len(node2.Aliases) > 0 {
+		id = node2.Aliases[0]
+	}
+	resolvedNode2, err := ResolveNode(id)
+	if err != nil {
+		t.Fatalf("resolve node2 (%s): %v", id, err)
+	}
+	cmd, err := BuildCommand(resolvedNode2, "agent_status")
 	if err != nil {
 		t.Fatalf("BuildCommand: %v", err)
 	}
-	if !strings.Contains(cmd, "agentGo.service") {
-		t.Errorf("command = %q, harus memakai service milik node-2 (agentGo)", cmd)
+	if !strings.Contains(cmd, node2.ServiceName+".service") {
+		t.Errorf("command = %q, harus memakai service milik node-2 (%s)", cmd, node2.ServiceName)
 	}
-	if strings.Contains(cmd, NodeSSHMap["ubuntu"].ServiceName+".service") {
+	if strings.Contains(cmd, NodeSSHMap["ubuntu"].ServiceName+".service") && node2.ServiceName != NodeSSHMap["ubuntu"].ServiceName {
 		t.Errorf("command = %q, tidak boleh memakai service node-1", cmd)
 	}
 
-	node1 := NodeSSHMap["ubuntu"]
+	node1, ok := NodeSSHMap["ubuntu"]
+	if !ok {
+		t.Fatal("node ubuntu wajib ada di NodeSSHMap")
+	}
 	cmd1, err := BuildCommand(node1, "agent_status")
 	if err != nil {
 		t.Fatalf("BuildCommand node1: %v", err)

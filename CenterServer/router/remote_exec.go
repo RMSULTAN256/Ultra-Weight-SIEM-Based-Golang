@@ -92,8 +92,8 @@ func loadNodeSSHMap() map[string]NodeSSHConfig {
 		},
 		"ubuntu-2": {
 			AgentID:     "ubuntu-2",
-			Aliases:     splitAliases(envOr("SSH_NODE2_ALIASES", "ubuntu-2,127.0.0.1")),
-			Addr:        envOr("SSH_NODE2_ADDR", "127.0.0.1:22"),
+			Aliases:     splitAliases(envOr("SSH_NODE2_ALIASES", "ubuntu-2,127.0.0.2")),
+			Addr:        envOr("SSH_NODE2_ADDR", "127.0.0.2:22"),
 			User:        envOr("SSH_NODE2_USER", "ubuntu"),
 			KeyPath:     defaultKey,
 			KnownHosts:  defaultKnownHosts,

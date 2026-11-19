@@ -45,6 +45,7 @@ learn
 Report
 config
 logs
+data
 
 # IDE & OS Artifacts
 .vscode/
