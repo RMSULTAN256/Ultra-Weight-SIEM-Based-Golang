@@ -87,7 +87,7 @@ pipeline {
                             
                             # Step A: Stop service & siapkan folder config
                             sshpass -p "$TARGET_PASS" ssh -F /dev/null -p "$TARGET_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=15 root@"$TARGET_HOST" \
-                                "mkdir -p /root/Agent/config && (systemctl stop AgentGo || systemctl stop agentGo || true)"
+                                "mkdir -p /root/Agent/config && (systemctl stop agentGo || systemctl stop agentGo || true)"
                             
                             # Step B: Copy binary & file konfigurasi
                             sshpass -p "$TARGET_PASS" scp -F /dev/null -P "$TARGET_PORT" -o StrictHostKeyChecking=no \
@@ -97,7 +97,7 @@ pipeline {
                             
                             # Step C: Set permission & start service kembali
                             sshpass -p "$TARGET_PASS" ssh -F /dev/null -p "$TARGET_PORT" -o StrictHostKeyChecking=no root@"$TARGET_HOST" \
-                                "chmod +x /root/Agent/AgentServerOnline && (systemctl start AgentGo || systemctl start agentGo)"
+                                "chmod +x /root/Agent/AgentServerOnline && (systemctl start agentGo || systemctl start agentGo)"
                             
                             echo "===> [OK] Selesai deploy ke root@$TARGET_HOST"
                         }
