@@ -3,6 +3,7 @@ package models
 import "time"
 
 type SecurityLog struct {
+	ID         int64     `json:"id,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`
 	Hostname   string    `json:"hostname"`
 	EventType  string    `json:"event_type"`
@@ -20,6 +21,45 @@ type SecurityLog struct {
 	Command    string    `json:"command,omitempty"`
 	Method     string    `json:"method,omitempty"`
 	StatusCode int       `json:"status_code,omitempty"`
+	RawJSON    string    `json:"raw_json,omitempty"`
+}
+
+type LogArchiveFilter struct {
+	StartDate string `json:"start_date"` // YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+	EndDate   string `json:"end_date"`
+	Level     string `json:"level"`     // ALL, INFO, WARN, ATTACK / CRITICAL, or numeric string
+	Attack    string `json:"attack"`    // MITRE ID, event_type, or rule keyword
+	Node      string `json:"node"`      // Hostname filter
+	SourceIP  string `json:"source_ip"` // IP address filter
+	Search    string `json:"search"`    // Keyword search across messages/endpoints
+	Page      int    `json:"page"`      // 1-based pagination
+	Limit     int    `json:"limit"`     // items per page
+	SortOrder string `json:"sort_order"`// DESC or ASC
+}
+
+type LogArchiveStats struct {
+	TotalMatched int `json:"total_matched"`
+	InfoCount    int `json:"info_count"`
+	WarnCount    int `json:"warn_count"`
+	AttackCount  int `json:"attack_count"`
+}
+
+type LogArchiveResult struct {
+	Total      int           `json:"total"`
+	Page       int           `json:"page"`
+	Limit      int           `json:"limit"`
+	TotalPages int           `json:"total_pages"`
+	Filters    LogArchiveFilter `json:"filters"`
+	Stats      LogArchiveStats  `json:"stats"`
+	Logs       []SecurityLog    `json:"logs"`
+}
+
+type LogFilterOptions struct {
+	Nodes      []string `json:"nodes"`
+	Attacks    []string `json:"attacks"`
+	EventTypes []string `json:"event_types"`
+	MinDate    string   `json:"min_date"`
+	MaxDate    string   `json:"max_date"`
 }
 
 type IPTrafficRecord struct {

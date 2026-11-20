@@ -310,6 +310,8 @@ function setMapDirectScale(targetScale) {
   applyMapTransform();
 }
 
+let lastAppliedScale = null;
+
 /** Terapkan ViewBox ke SVG & Update Badge */
 function applyMapTransform() {
   const svg = document.getElementById('worldMapSvg');
@@ -326,8 +328,11 @@ function applyMapTransform() {
     hudText.textContent = `${mapViewState.scale.toFixed(1)}x`;
   }
 
-  // Update ukuran bulatan titik marker secara dinamis berbanding terbalik dengan zoom!
-  updateBeaconTransforms();
+  // Update ukuran bulatan titik marker hanya saat skala zoom berubah, mencegah SVG layout thrashing saat drag/pan
+  if (lastAppliedScale !== mapViewState.scale) {
+    lastAppliedScale = mapViewState.scale;
+    updateBeaconTransforms();
+  }
 }
 
 /** Perbarui Transformasi Skala Bulatan Marker agar Ukuran di Layar Tetap Presisi & Proporsional */
@@ -414,7 +419,10 @@ function updateGeoMapData(ipsList, agentsList) {
   }
 }
 
-/** Resolusi Koordinat & Negara Geografis */
+const RESOLVED_GEO_CACHE = new Map();
+const MAX_GEO_CACHE_ENTRIES = 2000;
+
+/** Resolusi Koordinat & Negara Geografis (dengan Dynamic In-Memory Caching) */
 function getGeoInfo(target) {
   if (!target) return null;
 
@@ -442,18 +450,38 @@ function getGeoInfo(target) {
   }
 
   // 1. Cek cache in-memory IP spesifik terlebih dahulu
-  if (GEO_CACHE[ip]) return GEO_CACHE[ip];
+  if (ip) {
+    const cached = RESOLVED_GEO_CACHE.get(ip);
+    if (cached) return cached;
+    if (GEO_CACHE[ip]) {
+      RESOLVED_GEO_CACHE.set(ip, GEO_CACHE[ip]);
+      return GEO_CACHE[ip];
+    }
+  }
 
-  // 2. Cek prefix / subnet
+  const cacheAndReturn = (res) => {
+    if (ip && res) {
+      if (RESOLVED_GEO_CACHE.size >= MAX_GEO_CACHE_ENTRIES) {
+        const firstKey = RESOLVED_GEO_CACHE.keys().next().value;
+        RESOLVED_GEO_CACHE.delete(firstKey);
+      }
+      RESOLVED_GEO_CACHE.set(ip, res);
+    }
+    return res;
+  };
+
+  // 2. Cek prefix / subnet statis (hanya prefix yang diakhiri titik/kolon atau subnet terdaftar)
   for (const prefix in GEO_CACHE) {
-    if (ip.startsWith(prefix)) return GEO_CACHE[prefix];
+    if ((prefix.endsWith('.') || prefix.endsWith(':') || prefix === '2402:8780:1') && ip.startsWith(prefix)) {
+      return cacheAndReturn(GEO_CACHE[prefix]);
+    }
   }
 
   // 3. Deteksi IP Private / LAN / Loopback -> Batam PDP Cluster
   if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.16.') || 
       ip.startsWith('172.17.') || ip.startsWith('172.18.') || ip.startsWith('172.19.') || 
       ip.startsWith('127.') || ip === '::1' || ip === 'localhost') {
-    return {
+    return cacheAndReturn({
       country: 'Indonesia',
       code: 'ID',
       city: 'Batam (Center SIEM)',
@@ -461,7 +489,7 @@ function getGeoInfo(target) {
       lon: 104.052,
       flag: '🇮🇩',
       isp: 'Internal PDP Gateway'
-    };
+    });
   }
 
   // 4. Jika koordinat riil (lat/lon) sudah disediakan langsung oleh Backend SIEM (Go) dari GeoIP
@@ -469,7 +497,7 @@ function getGeoInfo(target) {
   const targetLon = (typeof target.lon === 'number' && !isNaN(target.lon)) ? target.lon : 0;
   if (targetLat !== 0 || targetLon !== 0) {
     const resolvedCountry = country || getCountryNameByCode(code);
-    return {
+    return cacheAndReturn({
       country: resolvedCountry,
       code: code || 'XX',
       city: (city && !city.includes('Resolving') && city !== 'ID Gateway') ? city : `${resolvedCountry} Host`,
@@ -477,7 +505,7 @@ function getGeoInfo(target) {
       lon: targetLon,
       flag: getCountryFlag(code),
       isp: isp || 'Internet Transit'
-    };
+    });
   }
 
   // 5. Cek apakah kota ada di kamus kota presisi Nusantara (KNOWN_CITIES)
@@ -485,7 +513,7 @@ function getGeoInfo(target) {
   for (const key in KNOWN_CITIES) {
     if (cityLower.includes(key)) {
       const kc = KNOWN_CITIES[key];
-      return {
+      return cacheAndReturn({
         country: country || 'Indonesia',
         code: code || 'ID',
         city: kc.city,
@@ -493,7 +521,7 @@ function getGeoInfo(target) {
         lon: kc.lon,
         flag: getCountryFlag(code || 'ID'),
         isp: isp || 'Internet Transit'
-      };
+      });
     }
   }
 
@@ -518,7 +546,7 @@ function getGeoInfo(target) {
       }
     }
 
-    return {
+    return cacheAndReturn({
       country: resolvedCountry,
       code: code,
       city: cleanCity,
@@ -526,11 +554,11 @@ function getGeoInfo(target) {
       lon: finalLon,
       flag: flag,
       isp: isp || 'Internet Transit'
-    };
+    });
   }
 
   // 7. Default Fallback untuk IP yang belum ter-resolve
-  return {
+  return cacheAndReturn({
     country: 'Internet',
     code: 'XX',
     city: 'Global Transit',
@@ -538,7 +566,7 @@ function getGeoInfo(target) {
     lon: 104.052,
     flag: '🌐',
     isp: isp || 'Public Transit'
-  };
+  });
 }
 
 /** Resolusi Geografis Asinkron (No-op: Seluruh IP telah di-resolve secara internal oleh Backend Golang SIEM) */

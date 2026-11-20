@@ -35,8 +35,8 @@ class PixelBarChart {
   }
 
   setupResize() {
-    const resize = () => {
-      if (!this.canvas) return;
+    this._resizeHandler = () => {
+      if (!this.canvas || !this.canvas.parentElement) return;
       const rect = this.canvas.parentElement.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       this.canvas.width = rect.width * dpr;
@@ -46,15 +46,15 @@ class PixelBarChart {
       this.height = rect.height || 220;
       this.render();
     };
-    window.addEventListener('resize', resize);
-    setTimeout(resize, 40);
+    window.addEventListener('resize', this._resizeHandler);
+    this._resizeTimer = setTimeout(this._resizeHandler, 40);
   }
 
   setupInteractivity() {
     this.hoverIdx = -1;
     if (!this.canvas) return;
 
-    this.canvas.addEventListener('mousemove', (e) => {
+    this._mouseMoveHandler = (e) => {
       if (!this.width) return;
       const rect = this.canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -74,14 +74,40 @@ class PixelBarChart {
         this.hoverIdx = -1;
         this.render();
       }
-    });
+    };
 
-    this.canvas.addEventListener('mouseleave', () => {
+    this._mouseLeaveHandler = () => {
       if (this.hoverIdx !== -1) {
         this.hoverIdx = -1;
         this.render();
       }
-    });
+    };
+
+    this.canvas.addEventListener('mousemove', this._mouseMoveHandler);
+    this.canvas.addEventListener('mouseleave', this._mouseLeaveHandler);
+  }
+
+  destroy() {
+    if (this._resizeTimer) {
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = null;
+    }
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
+    }
+    if (this.canvas) {
+      if (this._mouseMoveHandler) {
+        this.canvas.removeEventListener('mousemove', this._mouseMoveHandler);
+        this._mouseMoveHandler = null;
+      }
+      if (this._mouseLeaveHandler) {
+        this.canvas.removeEventListener('mouseleave', this._mouseLeaveHandler);
+        this._mouseLeaveHandler = null;
+      }
+    }
+    this.canvas = null;
+    this.ctx = null;
   }
 
   setRange(range) {
@@ -276,8 +302,8 @@ class PixelDonutChart {
   }
 
   setupResize() {
-    const resize = () => {
-      if (!this.canvas) return;
+    this._resizeHandler = () => {
+      if (!this.canvas || !this.canvas.parentElement) return;
       const rect = this.canvas.parentElement.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       this.canvas.width = rect.width * dpr;
@@ -287,8 +313,21 @@ class PixelDonutChart {
       this.height = rect.height || 220;
       this.render();
     };
-    window.addEventListener('resize', resize);
-    setTimeout(resize, 40);
+    window.addEventListener('resize', this._resizeHandler);
+    this._resizeTimer = setTimeout(this._resizeHandler, 40);
+  }
+
+  destroy() {
+    if (this._resizeTimer) {
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = null;
+    }
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
+    }
+    this.canvas = null;
+    this.ctx = null;
   }
 
   update(newSegments) {
@@ -397,8 +436,8 @@ class PixelLineChart {
   }
 
   setupResize() {
-    const resize = () => {
-      if (!this.canvas) return;
+    this._resizeHandler = () => {
+      if (!this.canvas || !this.canvas.parentElement) return;
       const rect = this.canvas.parentElement.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       this.canvas.width = rect.width * dpr;
@@ -408,8 +447,21 @@ class PixelLineChart {
       this.height = rect.height || 220;
       this.render();
     };
-    window.addEventListener('resize', resize);
-    setTimeout(resize, 40);
+    window.addEventListener('resize', this._resizeHandler);
+    this._resizeTimer = setTimeout(this._resizeHandler, 40);
+  }
+
+  destroy() {
+    if (this._resizeTimer) {
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = null;
+    }
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
+    }
+    this.canvas = null;
+    this.ctx = null;
   }
 
   pushPoint(eps, latency) {

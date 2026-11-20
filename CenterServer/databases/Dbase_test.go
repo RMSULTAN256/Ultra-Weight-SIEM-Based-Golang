@@ -5,6 +5,7 @@ import (
 	"server3/models"
 	"strings"
 	"testing"
+	"time"
 )
 
 func bukaDB(t *testing.T) *DBService {
@@ -229,6 +230,160 @@ func TestIPTrafficUpsertDanGetAll(t *testing.T) {
 	}
 	if ips2[0].RequestCount != 10 || ips2[0].ThreatLevel != "Critical" {
 		t.Errorf("data IP setelah update tidak sesuai: count=%d threat=%s", ips2[0].RequestCount, ips2[0].ThreatLevel)
+	}
+}
+
+func TestSecurityLogsArchiveAndFilter(t *testing.T) {
+	db := bukaDB(t)
+
+	// Seed logs
+	t1, _ := time.Parse("2006-01-02 15:04:05", "2026-09-16 08:12:01")
+	t2, _ := time.Parse("2006-01-02 15:04:05", "2026-09-16 08:15:20")
+	t3, _ := time.Parse("2006-01-02 15:04:05", "2026-09-17 10:00:00")
+
+	logs := []models.SecurityLog{
+		{
+			Timestamp: t1,
+			Hostname:  "node-auth",
+			EventType: "auth_failure",
+			RuleID:    "RULE-SSH-BRUTEFORCE",
+			RuleDesc:  "SSH Brute Force Attack",
+			MitreID:   "T1110.001 Brute Force",
+			Severity:  12,
+			SourceIP:  "159.65.132.84",
+			Message:   "Failed password for invalid user admin",
+			Status:    "failed",
+			User:      "admin",
+			Service:   "sshd",
+		},
+		{
+			Timestamp: t2,
+			Hostname:  "node-auth",
+			EventType: "sudo",
+			RuleID:    "RULE-SUDO-EXEC",
+			RuleDesc:  "Privilege escalation attempt",
+			MitreID:   "T1548 Abuse Elevation",
+			Severity:  8,
+			SourceIP:  "159.65.132.84",
+			Message:   "User web-operator ran sudo /bin/bash",
+			Status:    "success",
+			User:      "web-operator",
+			Command:   "/bin/bash",
+		},
+		{
+			Timestamp: t3,
+			Hostname:  "node-web",
+			EventType: "web_access",
+			Severity:  3,
+			SourceIP:  "180.241.211.86",
+			Message:   "GET /index.php 200",
+			Status:    "success",
+			Endpoint:  "/index.php",
+			Method:    "GET",
+			StatusCode: 200,
+		},
+	}
+
+	if err := db.BatchInsertLogs(logs); err != nil {
+		t.Fatalf("BatchInsertLogs gagal: %v", err)
+	}
+
+	total, err := db.CountLogs()
+	if err != nil {
+		t.Fatalf("CountLogs gagal: %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("CountLogs diharapkan 3, dapat %d", total)
+	}
+
+	// 1. Query All
+	resAll, err := db.QueryLogsArchive(models.LogArchiveFilter{Page: 1, Limit: 10})
+	if err != nil {
+		t.Fatalf("QueryLogsArchive gagal: %v", err)
+	}
+	if resAll.Total != 3 || len(resAll.Logs) != 3 {
+		t.Errorf("Query all: total=%d, logs=%d", resAll.Total, len(resAll.Logs))
+	}
+	if resAll.Stats.InfoCount != 1 || resAll.Stats.WarnCount != 1 || resAll.Stats.AttackCount != 1 {
+		t.Errorf("Stats tidak cocok: info=%d warn=%d attack=%d", resAll.Stats.InfoCount, resAll.Stats.WarnCount, resAll.Stats.AttackCount)
+	}
+
+	// 2. Filter by Date (only 2026-09-16)
+	resDate, err := db.QueryLogsArchive(models.LogArchiveFilter{
+		StartDate: "2026-09-16",
+		EndDate:   "2026-09-16",
+		Page:      1,
+		Limit:     10,
+	})
+	if err != nil {
+		t.Fatalf("Query by date gagal: %v", err)
+	}
+	if resDate.Total != 2 {
+		t.Errorf("Filter tanggal 2026-09-16: diharapkan 2, dapat %d", resDate.Total)
+	}
+
+	// 3. Filter by Level ATTACK
+	resAttack, err := db.QueryLogsArchive(models.LogArchiveFilter{
+		Level: "ATTACK",
+		Page:  1,
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("Query by level gagal: %v", err)
+	}
+	if resAttack.Total != 1 || resAttack.Logs[0].Severity != 12 {
+		t.Errorf("Filter ATTACK level: total=%d, sev=%d", resAttack.Total, resAttack.Logs[0].Severity)
+	}
+
+	// 4. Filter by Attack (MITRE T1110)
+	resMitre, err := db.QueryLogsArchive(models.LogArchiveFilter{
+		Attack: "T1110",
+		Page:   1,
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("Query by attack gagal: %v", err)
+	}
+	if resMitre.Total != 1 || resMitre.Logs[0].MitreID != "T1110.001 Brute Force" {
+		t.Errorf("Filter T1110 attack: total=%d, mitre=%s", resMitre.Total, resMitre.Logs[0].MitreID)
+	}
+
+	// 5. Filter by Node
+	resNode, err := db.QueryLogsArchive(models.LogArchiveFilter{
+		Node:  "node-web",
+		Page:  1,
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("Query by node gagal: %v", err)
+	}
+	if resNode.Total != 1 || resNode.Logs[0].Hostname != "node-web" {
+		t.Errorf("Filter node-web: total=%d", resNode.Total)
+	}
+
+	// 6. Search keyword
+	resSearch, err := db.QueryLogsArchive(models.LogArchiveFilter{
+		Search: "sudo",
+		Page:   1,
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("Query by search gagal: %v", err)
+	}
+	if resSearch.Total != 1 || resSearch.Logs[0].User != "web-operator" {
+		t.Errorf("Filter search sudo: total=%d", resSearch.Total)
+	}
+
+	// 7. Test Filter Options
+	opts, err := db.GetLogFilterOptions()
+	if err != nil {
+		t.Fatalf("GetLogFilterOptions gagal: %v", err)
+	}
+	if len(opts.Nodes) < 2 {
+		t.Errorf("Filter options nodes diharapkan >= 2, dapat %v", opts.Nodes)
+	}
+	if len(opts.Attacks) < 1 {
+		t.Errorf("Filter options attacks diharapkan >= 1, dapat %v", opts.Attacks)
 	}
 }
 

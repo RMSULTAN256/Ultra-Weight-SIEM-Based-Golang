@@ -52,6 +52,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Real-Time Line Chart Tick (every 1 second)
   setInterval(() => {
+    if (document.hidden) {
+      currentEpsTick = 0;
+      return;
+    }
     if (lineChart) {
       const avgLat = dashState.agents.length > 0
         ? Math.round(dashState.agents.reduce((sum, a) => sum + (a.latency_ms || 30), 0) / dashState.agents.length)
@@ -115,15 +119,17 @@ async function refreshDashboardData() {
     }
 
     if (ipsRes.status === 'fulfilled' && ipsRes.value.ok) {
-      dashState.ips = await ipsRes.value.json() || [];
+      const rawIps = await ipsRes.value.json() || [];
+      dashState.ips = Array.isArray(rawIps) ? rawIps.slice(0, MAX_IPS) : [];
     }
 
     if (logsRes.status === 'fulfilled' && logsRes.value.ok) {
       const rawLogs = await logsRes.value.json() || [];
-      dashState.logs = rawLogs
+      dashState.logs = (rawLogs
         .filter(item => item && (item.message || item.rule_id || item.rule_desc || item.endpoint || item.command))
         .map(item => (typeof normalizeLogItem === 'function' ? normalizeLogItem(item) : item))
-        .filter(Boolean);
+        .filter(Boolean))
+        .slice(0, 1000);
     }
 
     updateDashboardKPIs();
@@ -202,110 +208,154 @@ function updateDashboardKPIs() {
   }
 }
 
-/** Update Bar Chart data based purely on actual live event logs */
+/** Update Bar Chart data based purely on actual live event logs (Single-pass epoch millisecond bucket aggregation) */
 function updateBarChartData() {
   if (!barChart) return;
 
   const now = new Date();
+  const nowMs = now.getTime();
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth();
+  const nowDate = now.getDate();
+
   const days7 = ['MIN', 'SEN', 'SEL', 'RAB', 'KAM', 'JUM', 'SAB'];
   const months12 = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];
 
-  // 0. Rebuild 24H dataset (8 blok interval 3 jam terakhir s.d. saat ini)
+  // 0. Setup 24H buckets (8 blok interval 3 jam terakhir s.d. saat ini)
   const d24 = [];
   for (let h = 7; h >= 0; h--) {
-    const slotStart = new Date(now.getTime() - (h + 1) * 3 * 3600 * 1000);
-    const slotEnd = new Date(now.getTime() - h * 3 * 3600 * 1000);
-    const startHour = String(slotStart.getHours()).padStart(2, '0') + ':00';
-
-    let success = 0;
-    let load = 0;
-
-    dashState.logs.forEach(l => {
-      const ld = new Date(l.timestamp);
-      if (ld >= slotStart && ld <= slotEnd) {
-        load++;
-        if (Number(l.level || 1) < 7) success++;
-      }
-    });
-
+    const slotStartMs = nowMs - (h + 1) * 3 * 3600 * 1000;
+    const slotEndMs = nowMs - h * 3 * 3600 * 1000;
+    const startHour = String(new Date(slotStartMs).getHours()).padStart(2, '0') + ':00';
     d24.push({
+      start: slotStartMs,
+      end: slotEndMs,
       label: h === 0 ? 'Kini' : startHour,
-      success: success,
-      load: load
+      success: 0,
+      load: 0
     });
   }
-  barChart.updateData('24H', d24);
+  const d24Min = d24[0].start;
+  const d24Max = d24[d24.length - 1].end;
 
-  // 1. Rebuild 7D dataset (7 hari berurutan s.d. hari ini)
+  // 1. Setup 7D buckets (7 hari berurutan s.d. hari ini)
   const d7 = [];
   for (let i = 6; i >= 0; i--) {
-    const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-    const dayStr = targetDate.toDateString();
-    const dayName = days7[targetDate.getDay()];
-
-    let success = 0;
-    let load = 0;
-
-    dashState.logs.forEach(l => {
-      const ld = new Date(l.timestamp);
-      if (ld.toDateString() === dayStr) {
-        load++;
-        if (Number(l.level || 1) < 7) success++;
-      }
-    });
-
+    const dayStart = new Date(nowYear, nowMonth, nowDate - i, 0, 0, 0, 0);
+    const dayStartMs = dayStart.getTime();
+    const dayEndMs = new Date(nowYear, nowMonth, nowDate - i, 23, 59, 59, 999).getTime();
     d7.push({
-      label: dayName,
-      success: success,
-      load: load
+      start: dayStartMs,
+      end: dayEndMs,
+      label: days7[dayStart.getDay()],
+      success: 0,
+      load: 0
     });
   }
-  barChart.updateData('7D', d7);
+  const d7Min = d7[0].start;
+  const d7Max = d7[d7.length - 1].end;
 
-  // 2. Rebuild 30D dataset (5 blok mingguan)
+  // 2. Setup 30D buckets (5 blok mingguan)
   const d30 = [];
   for (let w = 4; w >= 0; w--) {
-    const startRange = new Date(now.getTime() - (w + 1) * 6 * 24 * 3600 * 1000);
-    const endRange = new Date(now.getTime() - w * 6 * 24 * 3600 * 1000);
-
-    let success = 0;
-    let load = 0;
-
-    dashState.logs.forEach(l => {
-      const ld = new Date(l.timestamp);
-      if (ld >= startRange && ld <= endRange) {
-        load++;
-        if (Number(l.level || 1) < 7) success++;
-      }
-    });
-
+    const startRangeMs = nowMs - (w + 1) * 6 * 24 * 3600 * 1000;
+    const endRangeMs = nowMs - w * 6 * 24 * 3600 * 1000;
     d30.push({
+      start: startRangeMs,
+      end: endRangeMs,
       label: `MGG ${5 - w}`,
-      success: success,
-      load: load
+      success: 0,
+      load: 0
     });
   }
-  barChart.updateData('30D', d30);
+  const d30Min = d30[0].start;
+  const d30Max = d30[d30.length - 1].end;
 
-  // 3. Rebuild 12M dataset (12 bulan tahun berjalan)
-  const d12 = months12.map((m, mIdx) => {
-    let success = 0;
-    let load = 0;
-
-    dashState.logs.forEach(l => {
-      const ld = new Date(l.timestamp);
-      if (ld.getFullYear() === now.getFullYear() && ld.getMonth() === mIdx) {
-        load++;
-        if (Number(l.level || 1) < 7) success++;
-      }
+  // 3. Setup 12M buckets (12 bulan tahun berjalan)
+  const d12 = [];
+  for (let mIdx = 0; mIdx < 12; mIdx++) {
+    const startMs = new Date(nowYear, mIdx, 1, 0, 0, 0, 0).getTime();
+    const endMs = new Date(nowYear, mIdx + 1, 0, 23, 59, 59, 999).getTime();
+    d12.push({
+      start: startMs,
+      end: endMs,
+      label: months12[mIdx],
+      success: 0,
+      load: 0
     });
+  }
+  const d12Min = d12[0].start;
+  const d12Max = d12[d12.length - 1].end;
 
-    return {
-      label: m,
-      success: success,
-      load: load
-    };
-  });
+  // Single-pass aggregation over dashState.logs without re-allocating Date objects
+  const logs = dashState.logs || [];
+  const logLen = logs.length;
+  for (let i = 0; i < logLen; i++) {
+    const l = logs[i];
+    if (!l) continue;
+    let ts = l._ts;
+    if (ts === undefined) {
+      if (typeof l.timestamp === 'number') {
+        ts = l.timestamp < 1e11 ? l.timestamp * 1000 : l.timestamp;
+      } else if (l.timestamp) {
+        ts = Date.parse(l.timestamp);
+      } else {
+        ts = NaN;
+      }
+      l._ts = ts;
+    }
+    if (!ts || isNaN(ts)) continue;
+
+    const isSuccess = Number(l.level || 1) < 7;
+
+    // 24H check
+    if (ts >= d24Min && ts <= d24Max) {
+      for (let b = 0; b < 8; b++) {
+        if (ts >= d24[b].start && ts <= d24[b].end) {
+          d24[b].load++;
+          if (isSuccess) d24[b].success++;
+          break;
+        }
+      }
+    }
+
+    // 7D check
+    if (ts >= d7Min && ts <= d7Max) {
+      for (let b = 0; b < 7; b++) {
+        if (ts >= d7[b].start && ts <= d7[b].end) {
+          d7[b].load++;
+          if (isSuccess) d7[b].success++;
+          break;
+        }
+      }
+    }
+
+    // 30D check
+    if (ts >= d30Min && ts <= d30Max) {
+      for (let b = 0; b < 5; b++) {
+        if (ts >= d30[b].start && ts <= d30[b].end) {
+          d30[b].load++;
+          if (isSuccess) d30[b].success++;
+          break;
+        }
+      }
+    }
+
+    // 12M check
+    if (ts >= d12Min && ts <= d12Max) {
+      for (let b = 0; b < 12; b++) {
+        if (ts >= d12[b].start && ts <= d12[b].end) {
+          d12[b].load++;
+          if (isSuccess) d12[b].success++;
+          break;
+        }
+      }
+    }
+  }
+
+  barChart.updateData('24H', d24);
+  barChart.updateData('7D', d7);
+  barChart.updateData('30D', d30);
   barChart.updateData('12M', d12);
 }
 
@@ -762,6 +812,8 @@ function handleIncomingSecurityLog(normLog) {
   updateCategoryAndSuspiciousStats();
 }
 
+const MAX_IPS = 1000;
+
 /** Incoming SSE Heartbeat */
 function handleIncomingHeartbeat(data) {
   if (!data) return;
@@ -769,17 +821,20 @@ function handleIncomingHeartbeat(data) {
   if (!key) return;
 
   const idx = dashState.agents.findIndex(a => (a.agent_id || a.hostname) === key);
+  let isNewAgent = false;
   if (idx >= 0) {
     Object.assign(dashState.agents[idx], data);
   } else {
     dashState.agents.push(data);
+    isNewAgent = true;
   }
 
   updateDashboardKPIs();
   updateDonutChartData();
   renderSummaryTable();
 
-  if (typeof updateGeoMapData === 'function') {
+  // Only update geo map when a new agent node is registered, preventing SVG DOM teardown on periodic heartbeats
+  if (isNewAgent && typeof updateGeoMapData === 'function') {
     updateGeoMapData(dashState.ips, dashState.agents);
   }
 }
@@ -792,6 +847,9 @@ function handleIncomingIpUpdate(ipRec) {
     dashState.ips[idx] = ipRec;
   } else {
     dashState.ips.unshift(ipRec);
+    if (dashState.ips.length > MAX_IPS) {
+      dashState.ips.length = MAX_IPS;
+    }
   }
 
   updateDashboardKPIs();

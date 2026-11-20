@@ -519,11 +519,22 @@ function initGlobalSSE() {
   const token = getValidToken();
   if (!token) return;
 
+  // Close existing SSE connection before opening a new one
+  if (window.__pixelSSE) {
+    try {
+      window.__pixelSSE.close();
+    } catch (_) {}
+    window.__pixelSSE = null;
+  }
+
   const streamUrl = `/api/v1/stream?token=${encodeURIComponent(token)}`;
   const sse = new EventSource(streamUrl);
   window.__pixelSSE = sse;
 
+  let sseConsecutiveErrors = 0;
+
   sse.onmessage = (e) => {
+    sseConsecutiveErrors = 0;
     try {
       const data = JSON.parse(e.data);
       if (data.event_type === 'ENGINE_STATS') {
@@ -544,6 +555,44 @@ function initGlobalSSE() {
         window.dispatchEvent(new CustomEvent('siem-security-log', { detail: norm }));
       }
     } catch (_) {}
+  };
+
+  sse.onerror = (err) => {
+    // Check if token is expired or invalid
+    const currentToken = getValidToken();
+    if (!currentToken) {
+      console.warn('SSE: Token kedaluwarsa atau tidak valid, menghentikan koneksi stream.');
+      try {
+        sse.close();
+      } catch (_) {}
+      if (window.__pixelSSE === sse) {
+        window.__pixelSSE = null;
+      }
+      redirectToLogin('token_expired');
+      return;
+    }
+
+    sseConsecutiveErrors++;
+    // If stream was closed or multiple failures occurred, verify authentication with server
+    if (sse.readyState === EventSource.CLOSED || sseConsecutiveErrors >= 5) {
+      authFetch('/api/v1/agents')
+        .then(() => {
+          // Server is reachable and token is valid; reset consecutive errors
+          sseConsecutiveErrors = 0;
+        })
+        .catch((fetchErr) => {
+          // If authFetch detected 401, redirectToLogin('expired') was already triggered by authFetch.
+          // If the stream was closed permanently by the browser, clean up the instance reference.
+          if (sse.readyState === EventSource.CLOSED) {
+            try {
+              sse.close();
+            } catch (_) {}
+            if (window.__pixelSSE === sse) {
+              window.__pixelSSE = null;
+            }
+          }
+        });
+    }
   };
 }
 

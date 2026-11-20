@@ -57,8 +57,12 @@ async function reloadLogsData() {
         .map(item => (typeof normalizeLogItem === 'function' ? normalizeLogItem(item) : item))
         .filter(Boolean);
 
+      validLogs.forEach((l, i) => {
+        if (!l.id) l.id = 'log_' + i + '_' + (l.timestamp || Date.now());
+      });
+
       if (validLogs.length > 0) {
-        allLogs = validLogs;
+        allLogs = validLogs.slice(0, 500);
       }
 
       const countBadge = document.getElementById('logsEventCountBadge');
@@ -71,7 +75,8 @@ async function reloadLogsData() {
     }
 
     if (ipsRes.status === 'fulfilled' && ipsRes.value.ok) {
-      allIps = await ipsRes.value.json() || [];
+      const rawIps = await ipsRes.value.json() || [];
+      allIps = Array.isArray(rawIps) ? rawIps.slice(0, MAX_IPS) : [];
       const countIps = document.getElementById('countSubIps');
       if (countIps) countIps.textContent = String(allIps.length);
       renderIpsTable();
@@ -120,7 +125,8 @@ function renderTerminalLogs() {
     return;
   }
 
-  container.innerHTML = filtered.slice(0, 50).map((log, idx) => {
+  container.innerHTML = filtered.slice(0, 50).map((log) => {
+    const logIdStr = escapeHtml(String(log.id || ''));
     const timeStr = formatDateTime(log.timestamp);
     const badge = (log.badge || (log.level >= 10 ? 'ATTACK' : log.level >= 7 ? 'WARN' : log.action === 'SUCCESS' ? 'SUCCESS' : 'INFO')).toUpperCase();
     const component = log.component || (log.raw && log.raw.service) || log.agent || 'System';
@@ -143,7 +149,7 @@ function renderTerminalLogs() {
     }
 
     return `
-      <div class="terminal-log-row" onclick="inspectLog(${idx})" style="cursor: pointer;" title="Klik untuk inspect payload JSON">
+      <div class="terminal-log-row" data-log-id="${logIdStr}" onclick="inspectLogById(this.dataset.logId)" style="cursor: pointer;" title="Klik untuk inspect payload JSON">
         <span class="terminal-log-time">${timeStr}</span>
         <span class="pixel-tag ${badgeClass}">[ ${badge} ]</span>
         ${statusTag ? `<span style="margin-left: 2px;">${statusTag}</span>` : ''}
@@ -191,6 +197,7 @@ function generateSimulatedLog() {
   const cat = isWeb ? 'WEB' : randBadge;
 
   const newLog = {
+    id: 'sim_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
     timestamp: new Date().toISOString(),
     component: randComp,
     badge: cat,
@@ -332,8 +339,8 @@ function renderLogsTable() {
     return;
   }
 
-  tbody.innerHTML = paged.map((log, idx) => {
-    const globalIdx = start + idx;
+  tbody.innerHTML = paged.map((log) => {
+    const logIdStr = escapeHtml(String(log.id || ''));
     const time = formatDateTime(log.timestamp);
     const ip = log.source_ip || '127.0.0.1';
     const agent = log.agent || 'node';
@@ -382,7 +389,7 @@ function renderLogsTable() {
         </td>
         <td><span class="pixel-tag tag-purple">${mitre}</span></td>
         <td>
-          <button class="pixel-btn pixel-btn-sm pixel-btn-cyan" onclick="inspectLog(${globalIdx})">INSPECT</button>
+          <button class="pixel-btn pixel-btn-sm pixel-btn-cyan" data-log-id="${logIdStr}" onclick="inspectLogById(this.dataset.logId)">INSPECT</button>
         </td>
       </tr>
     `;
@@ -419,6 +426,9 @@ function applyLogFilters() {
 /** Incoming SSE Security Log */
 function handleIncomingSecurityLog(normLog) {
   if (!normLog) return;
+  if (!normLog.id) {
+    normLog.id = 'seq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  }
   allLogs.unshift(normLog);
   if (allLogs.length > 500) allLogs.pop();
 
@@ -437,6 +447,8 @@ function handleIncomingSecurityLog(normLog) {
   }
 }
 
+const MAX_IPS = 1000;
+
 /** Incoming SSE IP Update */
 function handleIncomingIpUpdate(ipRec) {
   if (!ipRec || !ipRec.ip) return;
@@ -445,6 +457,9 @@ function handleIncomingIpUpdate(ipRec) {
     allIps[existingIdx] = ipRec;
   } else {
     allIps.unshift(ipRec);
+    if (allIps.length > MAX_IPS) {
+      allIps.length = MAX_IPS;
+    }
   }
 
   const countIps = document.getElementById('countSubIps');
@@ -465,7 +480,7 @@ function getCountryFlag(countryCode) {
 }
 
 /** Helper untuk mem-parsing status ancaman (menerima string 'Critical'/'Suspicious' maupun angka 12/7) */
-function parseThreatInfo(item) {
+function parseThreatInfo(item, logsByIp = null) {
   if (!item) return { isThreat: false, isCritical: false, isSuspicious: false, level: 1 };
 
   const rawThreat = String(item.threat_level || item.severity || '').toLowerCase();
@@ -483,18 +498,31 @@ function parseThreatInfo(item) {
     numericLevel = numThreat >= 7 ? numThreat : 7;
   }
 
-  // Cross-reference dengan allLogs untuk mendeteksi event dengan severity >= 7
+  // Cross-reference dengan logs untuk mendeteksi event dengan severity >= 7
   const ip = item.ip || item.source_ip;
-  if (ip && Array.isArray(allLogs)) {
-    const matchLog = allLogs.find(l => (l.source_ip || l.ip) === ip && Number(l.level || 0) >= 7);
-    if (matchLog) {
-      const logLvl = Number(matchLog.level || 0);
-      if (logLvl >= 10) {
-        isCritical = true;
-        numericLevel = Math.max(numericLevel, logLvl);
-      } else if (!isCritical) {
-        isSuspicious = true;
-        numericLevel = Math.max(numericLevel, logLvl);
+  if (ip) {
+    if (logsByIp) {
+      const entry = logsByIp.get(ip);
+      if (entry && entry.maxLevel >= 7) {
+        if (entry.maxLevel >= 10) {
+          isCritical = true;
+          numericLevel = Math.max(numericLevel, entry.maxLevel);
+        } else if (!isCritical) {
+          isSuspicious = true;
+          numericLevel = Math.max(numericLevel, entry.maxLevel);
+        }
+      }
+    } else if (Array.isArray(allLogs)) {
+      const matchLog = allLogs.find(l => (l.source_ip || l.ip) === ip && Number(l.level || 0) >= 7);
+      if (matchLog) {
+        const logLvl = Number(matchLog.level || 0);
+        if (logLvl >= 10) {
+          isCritical = true;
+          numericLevel = Math.max(numericLevel, logLvl);
+        } else if (!isCritical) {
+          isSuspicious = true;
+          numericLevel = Math.max(numericLevel, logLvl);
+        }
       }
     }
   }
@@ -535,6 +563,23 @@ function renderIpsTable() {
     return;
   }
 
+  // Pre-index logs by IP for O(1) threatInfo lookups
+  const logsByIp = new Map();
+  if (Array.isArray(allLogs)) {
+    for (let i = 0; i < allLogs.length; i++) {
+      const l = allLogs[i];
+      const ip = l.source_ip || l.ip;
+      if (!ip) continue;
+      let entry = logsByIp.get(ip);
+      if (!entry) {
+        entry = { maxLevel: 0, threatLog: null, attackDesc: '' };
+        logsByIp.set(ip, entry);
+      }
+      const lvl = Number(l.level || 0);
+      if (lvl > entry.maxLevel) entry.maxLevel = lvl;
+    }
+  }
+
   tbody.innerHTML = paged.map(item => {
     const ip = item.ip || item.source_ip || '-';
     const node = item.node || item.hostname || 'Cluster';
@@ -542,7 +587,7 @@ function renderIpsTable() {
     const hits = item.request_count || item.hits || 1;
     const first = formatDateTime(item.first_seen);
     const last = formatDateTime(item.last_seen || item.timestamp);
-    const threatInfo = parseThreatInfo(item);
+    const threatInfo = parseThreatInfo(item, logsByIp);
 
     const country = item.country || 'Indonesia';
     const countryCode = item.country_code || 'ID';
@@ -623,12 +668,35 @@ function renderSuspiciousTable() {
   const tbody = document.getElementById('suspiciousTableBody');
   const countThreats = document.getElementById('countSubThreats');
 
-  // 1. Ambil semua IP yang tergolong threat dari allIps
+  // Pre-index logs by IP for O(1) lookups instead of nested O(N x M) scans
+  const logsByIp = new Map();
+  if (Array.isArray(allLogs)) {
+    for (let i = 0; i < allLogs.length; i++) {
+      const l = allLogs[i];
+      const ip = l.source_ip || l.ip;
+      if (!ip) continue;
+      let entry = logsByIp.get(ip);
+      if (!entry) {
+        entry = { maxLevel: 0, threatLog: null, attackDesc: '' };
+        logsByIp.set(ip, entry);
+      }
+      const lvl = Number(l.level || 0);
+      if (lvl > entry.maxLevel) entry.maxLevel = lvl;
+      if (lvl >= 7 && (!entry.threatLog || lvl > Number(entry.threatLog.level || 0))) {
+        entry.threatLog = l;
+      }
+      if ((lvl >= 7 || !entry.attackDesc) && (l.mitre_technique || l.rule_desc || l.rule_id)) {
+        entry.attackDesc = l.mitre_technique || l.rule_desc || l.rule_id;
+      }
+    }
+  }
+
   const seenIps = new Set();
   const suspiciousList = [];
 
+  // 1. Ambil semua IP yang tergolong threat dari allIps via pre-indexed lookup
   allIps.forEach(ipItem => {
-    const info = parseThreatInfo(ipItem);
+    const info = parseThreatInfo(ipItem, logsByIp);
     if (info.isThreat) {
       const ip = ipItem.ip || ipItem.source_ip;
       if (ip && !seenIps.has(ip)) {
@@ -641,34 +709,32 @@ function renderSuspiciousTable() {
     }
   });
 
-  // 2. Kumpulkan juga IP dari allLogs yang memiliki severity >= 7 jika belum ada di suspiciousList
-  if (Array.isArray(allLogs)) {
-    allLogs.forEach(log => {
-      const srcIp = log.source_ip || log.ip;
-      const lvl = Number(log.level || 0);
-      if (srcIp && lvl >= 7 && !seenIps.has(srcIp)) {
-        seenIps.add(srcIp);
-        suspiciousList.push({
-          ip: srcIp,
-          node: log.agent || log.hostname || 'ubuntu-3',
-          hostname: log.agent || log.hostname || 'ubuntu-3',
-          suspected_attack: log.mitre_technique || log.rule_desc || log.rule_id || 'T1110.001 Brute Force',
-          request_count: 1,
-          threat_level: lvl >= 10 ? 'Critical' : 'Suspicious',
-          threatInfo: {
-            isThreat: true,
-            isCritical: lvl >= 10,
-            isSuspicious: lvl < 10,
-            level: lvl
-          },
-          country: 'Inbound Threat',
-          country_code: 'XX',
-          city: '',
-          isp: ''
-        });
-      }
-    });
-  }
+  // 2. Kumpulkan juga IP dari logsByIp yang memiliki severity >= 7 jika belum ada di suspiciousList
+  logsByIp.forEach((entry, srcIp) => {
+    if (entry.maxLevel >= 7 && !seenIps.has(srcIp)) {
+      seenIps.add(srcIp);
+      const log = entry.threatLog || {};
+      const lvl = entry.maxLevel;
+      suspiciousList.push({
+        ip: srcIp,
+        node: log.agent || log.hostname || 'ubuntu-3',
+        hostname: log.agent || log.hostname || 'ubuntu-3',
+        suspected_attack: entry.attackDesc || 'T1110.001 Brute Force',
+        request_count: 1,
+        threat_level: lvl >= 10 ? 'Critical' : 'Suspicious',
+        threatInfo: {
+          isThreat: true,
+          isCritical: lvl >= 10,
+          isSuspicious: lvl < 10,
+          level: lvl
+        },
+        country: 'Inbound Threat',
+        country_code: 'XX',
+        city: '',
+        isp: ''
+      });
+    }
+  });
 
   // Update Badge Counter di Tab Header
   if (countThreats) countThreats.textContent = String(suspiciousList.length);
@@ -684,14 +750,14 @@ function renderSuspiciousTable() {
     const ip = item.ip || item.source_ip || '-';
     const host = item.node || item.hostname || 'Monitored Node';
     const hits = item.request_count || item.hits || 1;
-    const threatInfo = item.threatInfo || parseThreatInfo(item);
+    const threatInfo = item.threatInfo || parseThreatInfo(item, logsByIp);
 
-    // Cari signature serangan dan MITRE dari log terbaru IP ini
+    // Cari signature serangan dan MITRE dari pre-indexed map
     let attack = item.suspected_attack;
-    if (!attack && Array.isArray(allLogs)) {
-      const matchLog = allLogs.find(l => (l.source_ip || l.ip) === ip && (l.mitre_technique || l.rule_desc || l.rule_id));
-      if (matchLog) {
-        attack = matchLog.mitre_technique || matchLog.rule_desc || matchLog.rule_id;
+    if (!attack) {
+      const entry = logsByIp.get(ip);
+      if (entry && entry.attackDesc) {
+        attack = entry.attackDesc;
       }
     }
     if (!attack) attack = threatInfo.isCritical ? 'T1110.001 Brute Force' : 'Suspicious Probe';
@@ -792,8 +858,14 @@ async function unblockIpAction(ip, node) {
 // ==========================================================================
 let currentInspectedJson = '';
 
-function inspectLog(idx) {
-  const log = allLogs[idx];
+function inspectLogById(logId) {
+  let log = allLogs.find(l => String(l.id) === String(logId));
+  if (!log) {
+    const num = Number(logId);
+    if (!isNaN(num) && allLogs[num]) {
+      log = allLogs[num];
+    }
+  }
   if (!log) return;
   currentInspectedJson = JSON.stringify(log.raw || log, null, 2);
   const title = document.getElementById('jsonModalTitle');
@@ -803,6 +875,12 @@ function inspectLog(idx) {
   if (pre) pre.textContent = currentInspectedJson;
   if (modal) modal.classList.remove('hidden');
 }
+window.inspectLogById = inspectLogById;
+
+function inspectLog(idxOrId) {
+  inspectLogById(idxOrId);
+}
+window.inspectLog = inspectLog;
 
 function inspectIp(ipAddress) {
   const ipRec = allIps.find(i => (i.ip || i.source_ip) === ipAddress);

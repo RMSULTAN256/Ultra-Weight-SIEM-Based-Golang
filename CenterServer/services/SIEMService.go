@@ -69,8 +69,9 @@ var defaultCorrelationRules = []correlationRule{
 }
 
 type SIEMService struct {
-	db          *databases.DBService
-	ipWriteChan chan models.IPTrafficRecord
+	db           *databases.DBService
+	ipWriteChan  chan models.IPTrafficRecord
+	logWriteChan chan models.SecurityLog
 
 	clientsMu sync.Mutex
 	clients   map[chan string]bool
@@ -99,6 +100,7 @@ func NewSIEMService(dbs ...*databases.DBService) *SIEMService {
 	svc := &SIEMService{
 		db:            db,
 		ipWriteChan:   make(chan models.IPTrafficRecord, 1024),
+		logWriteChan:  make(chan models.SecurityLog, 4096),
 		clients:       make(map[chan string]bool),
 		ipRecords:     make(map[string]*models.IPTrafficRecord),
 		agents:        make(map[string]*models.DeviceStatus),
@@ -114,6 +116,32 @@ func NewSIEMService(dbs ...*databases.DBService) *SIEMService {
 		go func() {
 			for rec := range svc.ipWriteChan {
 				_ = svc.db.UpsertIP(&rec)
+			}
+		}()
+		go func() {
+			batch := make([]models.SecurityLog, 0, 50)
+			ticker := time.NewTicker(200 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case logEntry, ok := <-svc.logWriteChan:
+					if !ok {
+						if len(batch) > 0 {
+							_ = svc.db.BatchInsertLogs(batch)
+						}
+						return
+					}
+					batch = append(batch, logEntry)
+					if len(batch) >= 50 {
+						_ = svc.db.BatchInsertLogs(batch)
+						batch = batch[:0]
+					}
+				case <-ticker.C:
+					if len(batch) > 0 {
+						_ = svc.db.BatchInsertLogs(batch)
+						batch = batch[:0]
+					}
+				}
 			}
 		}()
 	}
